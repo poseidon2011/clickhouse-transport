@@ -1,7 +1,5 @@
 package org.welyss.mysqlsync;
 
-import java.lang.Thread.State;
-
 import javax.annotation.PreDestroy;
 
 import org.slf4j.Logger;
@@ -48,20 +46,20 @@ public class HelloWorld {
 	}
 
 	public static void main(String[] args) throws Exception {
-//		SpringApplication.run(HelloWorld.class, args);
-		Thread t = new Thread(new Runnable() {
-			@Override
-			public void run() {
-				// TODO Auto-generated method stub
-				System.out.println("run:" + Thread.currentThread().getState());
-			}
-		});
-		System.out.println("before start:" + t.getState().name());
-		t.start();
-		System.out.println("after start:" + t.getState().name());
-		Thread.sleep(3000);
-		System.out.println("after start 3s:" + t.getState().name());
-		if(t.getState().compareTo(State.TERMINATED) == 0) {
-		}
+		SpringApplication.run(HelloWorld.class, args);
+//		Thread t = new Thread(new Runnable() {
+//			@Override
+//			public void run() {
+//				// TODO Auto-generated method stub
+//				System.out.println("run:" + Thread.currentThread().getState());
+//			}
+//		});
+//		System.out.println("before start:" + t.getState().name());
+//		t.start();
+//		System.out.println("after start:" + t.getState().name());
+//		Thread.sleep(3000);
+//		System.out.println("after start 3s:" + t.getState().name());
+//		if(t.getState().compareTo(State.TERMINATED) == 0) {
+//		}
 	}
 }
