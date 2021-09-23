@@ -1,0 +1,8 @@
+datasource:
+  clickhouse:
+    acdb:
+      user: abc
+      password: ddd
+    bkdb:
+      user: efg
+      password: eee
