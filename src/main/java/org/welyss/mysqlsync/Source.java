@@ -6,7 +6,7 @@ public class Source {
 	private String name;
 	private Parser parser;
 	
-	public Source(String name, String host, int port, String user, String password, String logFile, long logPos, Target target) {
+	public Source(String name, String logFile, long logPos, Target target) {
 		this.name = name;
 		parser = new BinlogParser(name, host, port, user, password, logFile, logPos, target);
 	}
