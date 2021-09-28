@@ -13,28 +13,33 @@ import org.welyss.mysqlsync.db.MySQLHandlerImpl;
 
 public class Target {
 	public static final String ENCODING_UTF_8 = "UTF-8";
-	private MySQLHandler tMySQLHandler;
+	public String name;
+	public MySQLHandler tMySQLHandler;
 	private Map<String, Source> sourcePool;
 	private final Logger Log = LoggerFactory.getLogger(getClass());
 
 	public Target(String name) {
+		this.name = name;
 		tMySQLHandler = new MySQLHandlerImpl(name, HikariDataSourceFactory.create(name));
 	}
 
 	public void start() {
 		try {
-			List<Map<String, Object>> sources = tMySQLHandler.queryForMaps("", "");
-			sourcePool = new HashMap<String, Source>((int)(sources.size() / 0.6)); 
+			List<Map<String, Object>> sources = tMySQLHandler.queryForMaps("SELECT id, sync_db, log_file, log_pos, log_timestamp FROM ch_syncdata_savepoints");
+			sourcePool = new HashMap<String, Source>((int) (sources.size() / 0.6));
 			for (int i = 0; i < sources.size(); i++) {
 				Map<String, Object> sourceRow = sources.get(i);
-				String name = sourceRow.get("name").toString();
+				int id = Integer.parseInt(sourceRow.get("id").toString());
+				String syncDb = sourceRow.get("sync_db").toString();
 				String logFile = sourceRow.get("log_file").toString();
-				long logPos = 4;
-				if (sourceRow.containsKey("log_pos")) {
-					logPos = Long.parseLong(sourceRow.get("log_pos").toString());
+				long logPos = Long.parseLong(sourceRow.get("log_pos").toString());
+				Object logTimestampObj = sourceRow.get("log_pos");
+				Long logTimestamp = null;
+				if (logTimestampObj != null) {
+					logTimestamp = Long.parseLong(logTimestampObj.toString());
 				}
-				Source source = new Source(name, logFile, logPos, this);
-				sourcePool.put(name, source);
+				Source source = new Source(id, syncDb, logFile, logPos, logTimestamp, this);
+				sourcePool.put(syncDb, source);
 				source.start();
 			}
 		} catch (SQLException e) {
@@ -44,6 +49,6 @@ public class Target {
 	}
 
 	public void stop() {
-		
+
 	}
 }

@@ -14,6 +14,7 @@ import com.zaxxer.hikari.HikariDataSource;
 public class HikariDataSourceFactory {
 	@Autowired
 	private static DataSourceProperties dsProperties;
+
 	/**
 	 * @param name
 	 * @return
@@ -69,5 +70,32 @@ public class HikariDataSourceFactory {
 
 	private static long valueOrDefaultLong(String val, long def) {
 		return val == null ? def : Long.parseLong(val);
+	}
+
+	public static HostInfo getHostInfo(String name) {
+		HostInfo result = null;
+		Map<String, Map<String, String>> clickhouseMap = dsProperties.getClickhouse();
+		if (clickhouseMap.containsKey(name)) {
+			Map<String, String> dbinfo = clickhouseMap.get(name);
+			String host = dbinfo.get("host");
+			String port = dbinfo.get("port");
+			String username = dbinfo.get("username");
+			String password = dbinfo.get("password");
+			result = new HostInfo(host, port, username, password);
+		}
+		return result;
+	}
+
+	public static class HostInfo {
+		public String host;
+		public String port;
+		public String username;
+		public String password;
+		public HostInfo(String host, String port, String username, String password) {
+			this.host = host;
+			this.port = port;
+			this.username = username;
+			this.password = password;
+		}
 	}
 }
