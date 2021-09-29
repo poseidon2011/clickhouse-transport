@@ -29,7 +29,7 @@ public class MySQLHandlerImpl implements MySQLHandler {
 	}
 
 	@Override
-	public String getJdbcUrl() { 
+	public String getJdbcUrl() {
 		return ds.getJdbcUrl();
 	}
 

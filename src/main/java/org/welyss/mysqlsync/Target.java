@@ -20,7 +20,7 @@ public class Target {
 
 	public Target(String name) {
 		this.name = name;
-		tMySQLHandler = new MySQLHandlerImpl(name, HikariDataSourceFactory.create(name));
+		tMySQLHandler = new MySQLHandlerImpl(name, HikariDataSourceFactory.take(name));
 	}
 
 	public void start() {
