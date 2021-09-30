@@ -1,10 +1,10 @@
 package org.welyss.mysqlsync;
 
+import java.math.BigDecimal;
 import java.sql.SQLException;
-import java.text.ParseException;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -98,56 +98,40 @@ public class Source {
 								for (int i = 0; i < rows.size(); i++) {
 									Pair<Row> pair = rows.get(i);
 									boolean changed = false;
-									StringBuilder sqlBuff = new StringBuilder();
-									List<Object> params = new ArrayList<Object>();
 									StringBuilder whereCause = new StringBuilder();
+									StringBuilder setCause = new StringBuilder();
+									List<Object> params = new ArrayList<Object>();
 									List<Object> whereParams = new ArrayList<Object>();
 									List<Column> before = pair.getBefore().getColumns();
 									List<Column> after = pair.getAfter().getColumns();
+									Object[] formattedBefVals = new Object[before.size()];
 									for (int j = 0; j < columnLen; j++) {
 										MySQLColumn column = table.columns.get(j);
-										Object beforeVal = convertVal(table, column, before.get(j).getValue());
-										Object afterVal = convertVal(table, column, after.get(j).getValue());
-										if ((beforeVal == null && afterVal != null) || (beforeVal != null && !equareObj(beforeVal, afterVal))) {
-											if (column.want) {
-												if (sqlBuff.length() > 0) {
-													sqlBuff.append(",");
-												}
-												sqlBuff.append(" `").append(column.name).append("` = ?");
-												params.add(afterVal);
-												changed = true;
-											}
+										Object beforeVal = formatVal(table, column, before.get(j).getValue());
+										formattedBefVals[j] = beforeVal;
+										Object afterVal = formatVal(table, column, after.get(j).getValue());
+										if (!equalObj(beforeVal, afterVal)) {
+											setCause.append("`").append(column.name).append("`=?,");
+											params.add(afterVal);
+											changed = true;
 										}
-										if (whereCause.length() > 0) {
-											whereCause.append(" and ");
-										}
-										whereCause.append('`').append(column.name).append("` = ?");
-										whereParams.add(beforeVal);
 									}
-									sqlBuff.insert(0, "` set").insert(0, table).insert(0, "update `").append(" where ");
-									for (int i=0; i<target.unikey.size(); i++) {
-										ColumnInfo columnInfo = target.unikey.get(i);
-										if (i > 0) {
-											whereCause.append(" and ");
-										} else {
-											whereCause = new StringBuilder();
-											whereParams.clear();
+									if (table.uniqueKey.length > 0) {
+										for (int j = 0; j < table.uniqueKey.length; j++) {
+											int uniqIndex = table.uniqueKey[j];
+											whereCause.append('`').append(table.columns.get(uniqIndex)).append("`=? and ");
+											whereParams.add(formattedBefVals[uniqIndex]);
 										}
-										whereCause.append('`').append(columnInfo.name).append("` = ?");
-										whereParams.add(convertVal(tableInfo, columnInfo, before.get(columnInfo.order).getValue()));
-									}
-									sqlBuff.append(whereCause);
-									params.addAll(whereParams);
-									if (changed) {
-										List<List<Object>> paramsTmp;
-										if (sqlTaskMap.containsKey(sqlBuff.toString())) {
-											paramsTmp = sqlTaskMap.get(sqlBuff.toString());
-										} else {
-											paramsTmp = new ArrayList<List<Object>>();
-											sqlTaskMap.put(sqlBuff.toString(), paramsTmp);
+									} else {
+										for (int j = 0; j < columnLen; j++) {
+											MySQLColumn column = table.columns.get(j);
+											whereCause.append('`').append(column.name).append("`=? and ");
+											whereParams.add(formattedBefVals[j]);
 										}
-										paramsTmp.add(params);
 									}
+									setCause.setCharAt(setCause.length() - 1, ' ');
+									whereCause.delete(whereCause.length() - 5, whereCause.length());
+									String sql = "ALTER TABLE `" + table.name + "` UPDATE " + setCause + "WHERE " + whereCause;
 								}
 							}
 						} else {
@@ -307,47 +291,57 @@ public class Source {
 	private Object formatVal(MySQLTable table, MySQLColumn column, Object val) throws Exception {
 		Object result = null;
 		if (val != null) {
-//			try {
-				if (column.type.equals("timestamp") || column.type.equals("datetime")) {
+			if (column.type.equals("timestamp") || column.type.equals("datetime")) {
+				if (val.getClass().isAssignableFrom(Date.class)) {
+					result = val;
+				} else {
 					try {
-						LocalDateTime dt;
-						if (val.getClass().isAssignableFrom(Date.class)) {
-							dt = ((Date)val).toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
-						} else {
-							dt = CommonUtils.parseDate(val.toString());
-						}
-						if (dt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() <= 0) {
-							result = 0;
-						} else {
-							result = dt;
-						}
-					} catch (ParseException e) {
-						Log.error("from is [{}], to is [{}], table is [{}], columnInfo.name is [{}], columnInfo.type is [{}], val of class is [{}], val is [{}], {}",
+						result = CommonUtils.parseDate(val.toString());
+					} catch (DateTimeParseException e) {
+						Log.warn("from is [{}], to is [{}], table is [{}], columnInfo.name is [{}], columnInfo.type is [{}], val of class is [{}], val is [{}], {}",
 								name, target.name, table.name, column.name, column.type,
 								val.getClass().getName(), val, e);
 						result = val;
 					}
-				} else if (column.type.endsWith("unsigned")) {
-					if (column.type.startsWith("bigint(") && ((long) val & 0x8000000000000000l) != 0) {
-						result = readUnsignedLong((long) val);
-					} else if (column.type.startsWith("int(") && ((int) val & 0x80000000) != 0) {
-						result = ((Long.parseLong(val.toString()))) & 0xffffffffL;
-					} else if (column.type.startsWith("mediumint(") && ((int) val & 0x800000) != 0) {
-						result = Integer.parseInt(Integer.toBinaryString((int) val).substring(8, 32), 2);
-					} else if (column.type.startsWith("smallint(") && ((int) val & 0x8000) != 0) {
-						result = Integer.parseInt(Integer.toBinaryString((int) val).substring(16, 32), 2);
-					} else if (column.type.startsWith("tinyint(") && ((int) val & 0x80) != 0) {
-						result = Integer.parseInt(Integer.toBinaryString((int) val).substring(24, 32), 2);
-					} else {
-						result = val;
-					}
+				}
+			} else if (column.type.endsWith("unsigned")) {
+				if (column.type.startsWith("bigint(") && ((long) val & 0x8000000000000000l) != 0) {
+					result = readUnsignedLong((long) val);
+				} else if (column.type.startsWith("int(") && ((int) val & 0x80000000) != 0) {
+					result = ((Long.parseLong(val.toString()))) & 0xffffffffL;
+				} else if (column.type.startsWith("mediumint(") && ((int) val & 0x800000) != 0) {
+					result = Integer.parseInt(Integer.toBinaryString((int) val).substring(8, 32), 2);
+				} else if (column.type.startsWith("smallint(") && ((int) val & 0x8000) != 0) {
+					result = Integer.parseInt(Integer.toBinaryString((int) val).substring(16, 32), 2);
+				} else if (column.type.startsWith("tinyint(") && ((int) val & 0x80) != 0) {
+					result = Integer.parseInt(Integer.toBinaryString((int) val).substring(24, 32), 2);
 				} else {
 					result = val;
 				}
-//			} catch (Exception e) {
-//				Log.error("column->name: [{}], type:[{}], value[{}], error msg:[{}]", column.name, column.type, val, e.getMessage());
-//				throw e;
-//			}
+			} else {
+				result = val;
+			}
+		}
+		return result;
+	}
+
+	private BigDecimal readUnsignedLong(long value) {
+		if (value >= 0)
+			return new BigDecimal(value);
+		long lowValue = value & 0x7fffffffffffffffL;
+		return BigDecimal.valueOf(lowValue).add(BigDecimal.valueOf(Long.MAX_VALUE)).add(BigDecimal.valueOf(1));
+	}
+
+	private boolean equalObj(Object a, Object b) {
+		boolean result = false;
+		if (a == null && b == null) {
+			result = true;
+		} else if (a != null && b != null) {
+			if (a instanceof byte[]) {
+				result = Arrays.equals((byte[])a, (byte[])b);
+			} else {
+				result = a.equals(b);
+			}
 		}
 		return result;
 	}
@@ -360,7 +354,4 @@ public class Source {
 		}
 	}
 
-	private MySQLTable takeTableMeta(String table) {
-		
-	}
 }
