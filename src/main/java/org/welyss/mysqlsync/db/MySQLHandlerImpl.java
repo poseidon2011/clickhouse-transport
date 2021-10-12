@@ -7,8 +7,10 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -118,20 +120,26 @@ public class MySQLHandlerImpl implements MySQLHandler {
 		return result;
 	}
 
-	public int[] updateInTransaction(List<String> sqls, List<List<Object>> paramsList) throws SQLException {
-		int[] result = null;
+	@Override
+	public int executeInTransaction(Map<String, List<Object[]>> queue) throws SQLException {
+		int result = 0;
 		try (Connection conn = getConnection(false)) {
 			try {
-				result = new int[sqls.size()];
-				for (int i = 0; i < sqls.size(); i++) {
-					String sql = sqls.get(i);
-					List<Object> params = paramsList.get(i);
+				Iterator<Entry<String, List<Object[]>>> queueIt = queue.entrySet().iterator();
+				while (queueIt.hasNext()) {
+					Entry<String, List<Object[]>> row = queueIt.next();
+					String sql = row.getKey();
+					List<Object[]> params = row.getValue();
 					try (PreparedStatement ps = conn.prepareStatement(sql)) {
-						for (int j = 0; j < params.size(); j++) {
-							Object param = params.get(j);
-							ps.setObject(j + 1, param);
+						for (int i = 0; i < params.size(); i++) {
+							Object[] param = params.get(i);
+							for (int j = 0; j < param.length; j++) {
+								Object paramSingle = param[j];
+								ps.setObject(j + 1, paramSingle);
+							}
+							ps.addBatch();
 						}
-						result[i] = ps.executeUpdate();
+						ps.executeBatch();
 					}
 				}
 				conn.commit();

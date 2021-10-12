@@ -13,8 +13,7 @@ public interface MySQLHandler {
 
 	public int update(String sql, Object... params) throws SQLException;
 
-	public int[] updateInTransaction(List<String> sqls,
-			List<List<Object>> paramsList) throws SQLException;
+	public int executeInTransaction(Map<String, List<Object[]>> queue) throws SQLException;
 
 	public String getJdbcUrl();
 

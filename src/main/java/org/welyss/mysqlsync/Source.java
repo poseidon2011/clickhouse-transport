@@ -10,16 +10,15 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
-import java.util.Map.Entry;
 import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.welyss.mysqlsync.db.CHExecutor;
 import org.welyss.mysqlsync.db.HikariDataSourceFactory;
 import org.welyss.mysqlsync.db.HikariDataSourceFactory.HostInfo;
 import org.welyss.mysqlsync.db.MySQLColumn;
-import org.welyss.mysqlsync.db.MySQLQuery;
+import org.welyss.mysqlsync.db.MySQLQueue;
 import org.welyss.mysqlsync.db.MySQLTable;
 import org.welyss.mysqlsync.db.TableMetaCache;
 import org.welyss.mysqlsync.interfaces.Parser;
@@ -47,12 +46,15 @@ public class Source {
 	private Set<String> syncTables;
 	private final Logger Log = LoggerFactory.getLogger(getClass());
 	private Target target;
-	private Map<String, MySQLQuery> querys = new HashMap<String, MySQLQuery>();
+	private Map<String, MySQLQueue> querys = new HashMap<String, MySQLQueue>();
+	private CHExecutor chExecutor;
+	private long lastExecTimeStamp;
 
-	public Source(int id, String name, String logFile, long logPos, Long logTimestamp, Target target) {
-		this.id = id;
+	public Source(int sid, String name, String logFile, long logPos, Long logTimestamp, Target target) {
+		this.id = sid;
 		this.name = name;
 		this.target = target;
+		chExecutor = new CHExecutor(target.tMySQLHandler);
 		try {
 			target.tMySQLHandler.queryForMaps("SELECT sync_table FROM ch_syncdata_detail WHERE sp_id=?", id).forEach((map)->{
 				syncTables.add(map.get("sync_table").toString());
@@ -77,20 +79,13 @@ public class Source {
 						|| MySQLConstants.DELETE_ROWS_EVENT_V2 == type) {
 					AbstractRowEvent abre = (AbstractRowEvent) event;
 					if (hostInfo.schema.equals(abre.getDatabaseName()) && syncTables.contains(abre.getTableName())) {
-						Map<String, List<List<Object>>> sqlTaskMap = new HashMap<String, List<List<Object>>>();
+						byte sqlType = -1;
 						MySQLTable table = TableMetaCache.get(name, abre.getTableName());
-						MySQLQuery query;
-						byte sqlType;
-						if (querys.containsKey(table.name)) {
-							query = querys.get(table.name);
-						} else {
-							query = new MySQLQuery();
-							querys.put(table.name, query);
-						}
 						String sql = null;
+						List<Object> params = new ArrayList<Object>();
 						if (MySQLConstants.UPDATE_ROWS_EVENT == type || MySQLConstants.UPDATE_ROWS_EVENT_V2 == type) {
 							// update
-							sqlType = MySQLQuery.QUERY_TYPE_UPDATE;
+							sqlType = MySQLQueue.QUERY_TYPE_UPDATE;
 							List<Pair<Row>> rows = MySQLConstants.UPDATE_ROWS_EVENT == type ? ((UpdateRowsEvent) event).getRows() : ((UpdateRowsEventV2) event).getRows();
 							if (rows.size() > 0) {
 								int columnLen  = rows.get(0).getBefore().getColumns().size();
@@ -103,7 +98,6 @@ public class Source {
 									boolean changed = false;
 									StringBuilder whereCause = new StringBuilder();
 									StringBuilder setCause = new StringBuilder();
-									List<Object> params = new ArrayList<Object>();
 									List<Object> whereParams = new ArrayList<Object>();
 									List<Column> before = pair.getBefore().getColumns();
 									List<Column> after = pair.getAfter().getColumns();
@@ -119,27 +113,29 @@ public class Source {
 											changed = true;
 										}
 									}
-									if (table.uniqueKey.length > 0) {
-										for (int j = 0; j < table.uniqueKey.length; j++) {
-											int uniqIndex = table.uniqueKey[j];
-											whereCause.append('`').append(table.columns.get(uniqIndex)).append("`=? and ");
-											whereParams.add(formattedBefVals[uniqIndex]);
+									if (changed) {
+										if (table.uniqueKey.length > 0) {
+											for (int j = 0; j < table.uniqueKey.length; j++) {
+												int uniqIndex = table.uniqueKey[j];
+												whereCause.append('`').append(table.columns.get(uniqIndex)).append("`=? and ");
+												whereParams.add(formattedBefVals[uniqIndex]);
+											}
+										} else {
+											for (int j = 0; j < columnLen; j++) {
+												MySQLColumn column = table.columns.get(j);
+												whereCause.append('`').append(column.name).append("`=? and ");
+												whereParams.add(formattedBefVals[j]);
+											}
 										}
-									} else {
-										for (int j = 0; j < columnLen; j++) {
-											MySQLColumn column = table.columns.get(j);
-											whereCause.append('`').append(column.name).append("`=? and ");
-											whereParams.add(formattedBefVals[j]);
-										}
+										setCause.setCharAt(setCause.length() - 1, ' ');
+										whereCause.delete(whereCause.length() - 5, whereCause.length());
+										sql = "ALTER TABLE `" + table.name + "` UPDATE " + setCause + "WHERE " + whereCause;
 									}
-									setCause.setCharAt(setCause.length() - 1, ' ');
-									whereCause.delete(whereCause.length() - 5, whereCause.length());
-									sql = "ALTER TABLE `" + table.name + "` UPDATE " + setCause + "WHERE " + whereCause;
 								}
 							}
 						} else if (MySQLConstants.WRITE_ROWS_EVENT == type || MySQLConstants.WRITE_ROWS_EVENT_V2 == type) {
 							// insert
-							sqlType = MySQLQuery.QUERY_TYPE_INSERT;
+							sqlType = MySQLQueue.QUERY_TYPE_INSERT;
 							List<Row> rows = MySQLConstants.WRITE_ROWS_EVENT == type ? ((WriteRowsEvent) event).getRows() : ((WriteRowsEventV2) event).getRows();
 							if (rows.size() > 0) {
 								int columnLen  = rows.get(0).getColumns().size();
@@ -148,10 +144,8 @@ public class Source {
 								}
 								for (int i = 0; i < rows.size(); i++) {
 									Row row = rows.get(i);
-									StringBuilder sqlBuff = new StringBuilder("INSERT INTO `");
 									StringBuilder selColumns = new StringBuilder();
 									StringBuilder sqlVals = new StringBuilder();
-									List<Object> params = new ArrayList<Object>();
 									List<Column> columns = row.getColumns();
 									for (int j=0; j<columnLen; j++) {
 										try {
@@ -177,7 +171,7 @@ public class Source {
 							}
 						} else if (MySQLConstants.DELETE_ROWS_EVENT == type || MySQLConstants.DELETE_ROWS_EVENT_V2 == type) {
 							// delete
-							sqlType = MySQLQuery.QUERY_TYPE_DELETE;
+							sqlType = MySQLQueue.QUERY_TYPE_DELETE;
 							List<Row> rows = MySQLConstants.DELETE_ROWS_EVENT == type ? ((DeleteRowsEvent) event).getRows() : ((DeleteRowsEventV2) event).getRows();
 							if (rows.size() > 0) {
 								int columnLen  = rows.get(0).getColumns().size();
@@ -187,7 +181,6 @@ public class Source {
 								for (int i = 0; i < rows.size(); i++) {
 									Row row = rows.get(i);
 									StringBuilder whereCause = new StringBuilder();
-									List<Object> whereParams = new ArrayList<Object>();
 									List<Column> columns = row.getColumns();
 									for (int j=0; j<table.uniqueKey.length; j++) {
 										MySQLColumn column = table.columns.get(table.uniqueKey[j]);
@@ -195,50 +188,80 @@ public class Source {
 											whereCause.append(" and ");
 										}
 										whereCause.append('`').append(column.name).append("`=?");
-										whereParams.add(formatVal(table, column, columns.get(column.order).getValue()));
+										params.add(formatVal(table, column, columns.get(column.order).getValue()));
 									}
 									sql = "ALTER TABLE `" + table.name + "` DELETE WHERE " + whereCause;
 								}
 							}
 						}
-						synchronized (query) {
-							Log.debug("task[{}-{}-{}] in source lock.", name, target.name, table.name);
-							query.lastType = sqlType;
-							// add task
-							switch (query.lastType) {
-							case MySQLQuery.QUERY_TYPE_INSERT:
-								query.insert.add(sql);
-								break;
-							case MySQLQuery.QUERY_TYPE_DELETE:
-								query.delete.add(sql);
-								break;
-							case MySQLQuery.QUERY_TYPE_UPDATE:
-								query.update.add(sql);
-								break;
+						// get query and ready to execute
+						MySQLQueue query;
+						if (querys.containsKey(table.name)) {
+							query = querys.get(table.name);
+						} else {
+							query = new MySQLQueue();
+							querys.put(table.name, query);
+						}
+						// exec
+						long now = System.currentTimeMillis();
+						if (query.count >= CommonUtils.bufferSize
+								|| (now - lastExecTimeStamp) > 10000
+								|| confict(query.lastType, sqlType)) {
+							try {
+								Log.debug("[{}-{}: {}] buffer full, executing, taskQuene.total is [{}].", name, target.name, table.name, query.count);
+//									taskQuene.wait();
+								chExecutor.execute(query);
+								chExecutor.savepoint(parser.getLogPos(), parser.getLogTimestamp(), id);
+								query.clear();
+								lastExecTimeStamp = now;
+							} catch (Exception e) {
+								Log.error("cause an exception when chExecutor.exec, reason is [{}]", e);
+								throw new RuntimeException(e);
 							}
-							query.count++;
+						}
+						if (sql != null) {
+							// lock start
+							synchronized (query) {
+								Log.debug("task[{}-{}-{}] in source lock.", name, target.name, table.name);
+								// add task
+								Map<String, List<Object[]>> queue = null;
+								switch (sqlType) {
+								case MySQLQueue.QUERY_TYPE_INSERT:
+									queue = query.insert;
+									break;
+								case MySQLQueue.QUERY_TYPE_DELETE:
+									queue = query.delete;
+									break;
+								case MySQLQueue.QUERY_TYPE_UPDATE:
+									queue = query.update;
+									break;
+								}
+								addQueue(sql, params, queue);
+								query.count++;
+							}
+							// lock end
+							// update log position
 							parser.setLogPos(beh.getNextPosition());
 							parser.setLogTimestamp(event.getHeader().getTimestamp());
-							// exec
-							if (query.count >= CommonUtils.bufferSize) {
-								try {
-									Log.debug("[{}] buffer full, executing, taskQuene.total is [{}].", dbAlias, taskQuene.total);
-//									taskQuene.wait();
-									execTask.execute();
-								} catch (InterruptedException e) {
-									Log.error("cause an interrupted exception when taskQuene.wait, reason is [{}]", e);
-									throw new RuntimeException(e);
-								}
-							}
-							logTimestamp = beh.getTimestamp();
-						} // lock end
+							query.lastType = sqlType;
+						}
 					}
 				}
 			}
 		});
 	}
 
-	private Object formatVal(MySQLTable table, MySQLColumn column, Object val) throws Exception {
+	private void addQueue(String sql, List<Object> params, Map<String, List<Object[]>> queue) {
+		if (queue.containsKey(sql)) {
+			queue.get(sql).add(params.toArray());
+		} else {
+			List<Object[]> tmpParams = new ArrayList<Object[]>();
+			tmpParams.add(params.toArray());
+			queue.put(sql, tmpParams);
+		}
+	}
+
+	private Object formatVal(MySQLTable table, MySQLColumn column, Object val) {
 		Object result = null;
 		if (val != null) {
 			if (column.type.equals("timestamp") || column.type.equals("datetime")) {
@@ -294,6 +317,11 @@ public class Source {
 			}
 		}
 		return result;
+	}
+
+	private boolean confict(byte last, byte current) {
+		return (last == MySQLQueue.QUERY_TYPE_INSERT && (current == MySQLQueue.QUERY_TYPE_UPDATE || current == MySQLQueue.QUERY_TYPE_DELETE))
+				|| (last == MySQLQueue.QUERY_TYPE_DELETE && current == MySQLQueue.QUERY_TYPE_INSERT);
 	}
 
 	public void start() {
