@@ -1,4 +1,4 @@
-package org.welyss.mysqlsync.interfaces;
+package org.welyss.mysqlsync;
 
 import com.google.code.or.binlog.BinlogEventListener;
 

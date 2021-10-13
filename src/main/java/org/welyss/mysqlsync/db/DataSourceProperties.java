@@ -1,4 +1,4 @@
-package org.welyss.mysqlsync;
+package org.welyss.mysqlsync.db;
 
 import java.util.Map;
 

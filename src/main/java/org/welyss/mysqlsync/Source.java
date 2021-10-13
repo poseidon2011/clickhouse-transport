@@ -16,12 +16,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.welyss.mysqlsync.db.CHExecutor;
 import org.welyss.mysqlsync.db.HikariDataSourceFactory;
-import org.welyss.mysqlsync.db.HikariDataSourceFactory.HostInfo;
 import org.welyss.mysqlsync.db.MySQLColumn;
 import org.welyss.mysqlsync.db.MySQLQueue;
 import org.welyss.mysqlsync.db.MySQLTable;
 import org.welyss.mysqlsync.db.TableMetaCache;
-import org.welyss.mysqlsync.interfaces.Parser;
+import org.welyss.mysqlsync.db.HikariDataSourceFactory.HostInfo;
 
 import com.google.code.or.binlog.BinlogEventListener;
 import com.google.code.or.binlog.BinlogEventV4;
@@ -44,7 +43,7 @@ public class Source {
 	private String name;
 	private Parser parser;
 	private Set<String> syncTables;
-	private final Logger Log = LoggerFactory.getLogger(getClass());
+	private final Logger log = LoggerFactory.getLogger(getClass());
 	private Target target;
 	private Map<String, MySQLQueue> querys = new HashMap<String, MySQLQueue>();
 	private CHExecutor chExecutor;
@@ -159,7 +158,7 @@ public class Source {
 											while (itci.hasNext()) {
 												sb.append(itci.next().name).append(",");
 											}
-											Log.error("target table:[{}.{}] tableInfo.columns: {}=>[{}] compare with binlog.columns size: {}."
+											log.error("target table:[{}.{}] tableInfo.columns: {}=>[{}] compare with binlog.columns size: {}."
 													, target.tMySQLHandler.getSchema(), table.name, table.columns.size(), sb, columns.size());
 											throw ioobe;
 										}
@@ -208,21 +207,20 @@ public class Source {
 								|| (now - lastExecTimeStamp) > 10000
 								|| confict(query.lastType, sqlType)) {
 							try {
-								Log.debug("[{}-{}: {}] buffer full, executing, taskQuene.total is [{}].", name, target.name, table.name, query.count);
+								log.debug("[{}-{}: {}] buffer full, executing, taskQuene.total is [{}].", name, target.name, table.name, query.count);
 //									taskQuene.wait();
 								chExecutor.execute(query);
 								chExecutor.savepoint(parser.getLogPos(), parser.getLogTimestamp(), id);
-								query.clear();
 								lastExecTimeStamp = now;
 							} catch (Exception e) {
-								Log.error("cause an exception when chExecutor.exec, reason is [{}]", e);
+								log.error("cause an exception when chExecutor.exec, reason is [{}]", e);
 								throw new RuntimeException(e);
 							}
 						}
 						if (sql != null) {
 							// lock start
 							synchronized (query) {
-								Log.debug("task[{}-{}-{}] in source lock.", name, target.name, table.name);
+								log.debug("task[{}-{}-{}] in source lock.", name, target.name, table.name);
 								// add task
 								Map<String, List<Object[]>> queue = null;
 								switch (sqlType) {
@@ -271,7 +269,7 @@ public class Source {
 					try {
 						result = CommonUtils.parseDate(val.toString());
 					} catch (DateTimeParseException e) {
-						Log.warn("from is [{}], to is [{}], table is [{}], columnInfo.name is [{}], columnInfo.type is [{}], val of class is [{}], val is [{}], {}",
+						log.warn("from is [{}], to is [{}], table is [{}], columnInfo.name is [{}], columnInfo.type is [{}], val of class is [{}], val is [{}], {}",
 								name, target.name, table.name, column.name, column.type,
 								val.getClass().getName(), val, e);
 						result = val;
@@ -325,6 +323,7 @@ public class Source {
 	}
 
 	public void start() {
+		log.info("Source: {}-{} start.", name, target.name);
 		try {
 			parser.start();
 		} catch (Exception e) {

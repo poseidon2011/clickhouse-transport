@@ -7,15 +7,20 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.welyss.mysqlsync.DataSourceProperties;
+import org.springframework.stereotype.Component;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
+@Component
 public class HikariDataSourceFactory {
-	@Autowired
-	private static DataSourceProperties dsProperties;
+	private static DataSourceProperties dataSourceProperties;
 	private static Map<String, HikariDataSource> pool = new ConcurrentHashMap<String, HikariDataSource>();
+
+	@Autowired
+	public HikariDataSourceFactory(DataSourceProperties dataSourceProperties) {
+		HikariDataSourceFactory.dataSourceProperties = dataSourceProperties;
+	}
 
 	/**
 	 * @param name
@@ -26,7 +31,7 @@ public class HikariDataSourceFactory {
 		if (pool.containsKey(name)) {
 			ds = pool.get(name);
 		} else {
-			Map<String, Map<String, String>> clickhouseMap = dsProperties.getClickhouse();
+			Map<String, Map<String, String>> clickhouseMap = dataSourceProperties.getClickhouse();
 			if (clickhouseMap.containsKey(name)) {
 				Map<String, String> dbinfo = clickhouseMap.get(name);
 				HikariConfig config = new HikariConfig();
@@ -42,7 +47,8 @@ public class HikariDataSourceFactory {
 				String prepStmtCacheSize = dbinfo.get("prepStmtCacheSize");
 				String prepStmtCacheSqlLimit = dbinfo.get("prepStmtCacheSqlLimit");
 				config.setPoolName(name);
-				config.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + schema + "?useUnbufferedInput=false&useSSL=false&rewriteBatchedStatements=true");
+				config.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + schema
+						+ "?useUnbufferedInput=false&useSSL=false&rewriteBatchedStatements=true");
 				config.setDriverClassName("com.mysql.jdbc.Driver");
 				config.setUsername(username);
 				config.setPassword(password);
@@ -57,7 +63,8 @@ public class HikariDataSourceFactory {
 				}
 				config.setIdleTimeout(valueOrDefaultLong(dbinfo.get("idleTimeout"), MINUTES.toMillis(10)));
 				config.setKeepaliveTime(valueOrDefaultLong(dbinfo.get("keepaliveTime"), MINUTES.toMillis(1)));
-				config.setLeakDetectionThreshold(valueOrDefaultLong(dbinfo.get("leakDetectionThreshold"), MINUTES.toMillis(5)));
+				config.setLeakDetectionThreshold(
+						valueOrDefaultLong(dbinfo.get("leakDetectionThreshold"), MINUTES.toMillis(5)));
 				config.setMaxLifetime(valueOrDefaultLong(dbinfo.get("maxLifetime"), MINUTES.toMillis(30)));
 				config.setValidationTimeout(valueOrDefaultLong(dbinfo.get("validationTimeout"), SECONDS.toMillis(5)));
 				ds = new HikariDataSource(config);
@@ -81,7 +88,7 @@ public class HikariDataSourceFactory {
 
 	public static HostInfo getHostInfo(String name) {
 		HostInfo result = null;
-		Map<String, Map<String, String>> clickhouseMap = dsProperties.getClickhouse();
+		Map<String, Map<String, String>> clickhouseMap = dataSourceProperties.getClickhouse();
 		if (clickhouseMap.containsKey(name)) {
 			Map<String, String> dbinfo = clickhouseMap.get(name);
 			String host = dbinfo.get("host");
@@ -100,6 +107,7 @@ public class HikariDataSourceFactory {
 		public String username;
 		public String password;
 		public String schema;
+
 		public HostInfo(String host, String port, String username, String password, String schema) {
 			this.host = host;
 			this.port = port;

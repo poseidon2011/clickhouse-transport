@@ -1,8 +1,8 @@
 datasource:
   clickhouse:
-    acdb:
-      user: abc
-      password: ddd
     bkdb:
-      user: efg
-      password: eee
+      host: 10.0.29.30
+      port: 9004
+      username: wuysh
+      password: wys19851011
+      schema: wystest

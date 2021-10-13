@@ -16,7 +16,7 @@ public class Target {
 	public String name;
 	public MySQLHandler tMySQLHandler;
 	private Map<String, Source> sourcePool;
-	private final Logger Log = LoggerFactory.getLogger(getClass());
+	private final Logger log = LoggerFactory.getLogger(getClass());
 
 	public Target(String name) {
 		this.name = name;
@@ -24,6 +24,7 @@ public class Target {
 	}
 
 	public void start() {
+		log.info("target: {} start.", name);
 		try {
 			List<Map<String, Object>> sources = tMySQLHandler.queryForMaps("SELECT id, sync_db, log_file, log_pos, log_timestamp FROM ch_syncdata_savepoints");
 			sourcePool = new HashMap<String, Source>((int) (sources.size() / 0.6));
@@ -43,7 +44,7 @@ public class Target {
 				source.start();
 			}
 		} catch (SQLException e) {
-			Log.error("{}", e);
+			log.error("{}", e);
 			throw new RuntimeException("failed to get sources.", e);
 		}
 	}
