@@ -16,7 +16,7 @@ public class TableMetaCache {
 		SoftReference<MySQLTable> tableRef = cache.get(uniname);
 		if (tableRef == null || (table = tableRef.get()) == null) {
 			// generate table meta info from mysql
-			MySQLHandlerImpl handler = new MySQLHandlerImpl(dbnm, HikariDataSourceFactory.take(dbnm));
+			MySQLHandlerImpl handler = new MySQLHandlerImpl(dbnm, DataSourceFactory.take(dbnm));
 			try {
 				// | Field       | Type         | Null | Key | Default | Extra |
 				List<Map<String, Object>> meta = handler.queryForMaps("DESC `" + tablenm + "`");

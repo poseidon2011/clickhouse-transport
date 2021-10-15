@@ -15,12 +15,12 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.welyss.mysqlsync.db.CHExecutor;
-import org.welyss.mysqlsync.db.HikariDataSourceFactory;
+import org.welyss.mysqlsync.db.DataSourceFactory;
+import org.welyss.mysqlsync.db.DataSourceFactory.HostInfo;
 import org.welyss.mysqlsync.db.MySQLColumn;
 import org.welyss.mysqlsync.db.MySQLQueue;
 import org.welyss.mysqlsync.db.MySQLTable;
 import org.welyss.mysqlsync.db.TableMetaCache;
-import org.welyss.mysqlsync.db.HikariDataSourceFactory.HostInfo;
 
 import com.google.code.or.binlog.BinlogEventListener;
 import com.google.code.or.binlog.BinlogEventV4;
@@ -62,7 +62,7 @@ public class Source {
 			throw new RuntimeException("can't get sync tables.", e);
 		}
 
-		HostInfo hostInfo = HikariDataSourceFactory.getHostInfo(name);
+		HostInfo hostInfo = DataSourceFactory.getHostInfo(name);
 		parser = new BinlogParser(id, name + "-" + target.name, hostInfo.host, hostInfo.port == null ? DEFAULT_MYSQL_PORT : hostInfo.port, hostInfo.username, hostInfo.password, logFile, logPos, logTimestamp);
 		parser.setBinlogEventListener(new BinlogEventListener() {
 			@Override

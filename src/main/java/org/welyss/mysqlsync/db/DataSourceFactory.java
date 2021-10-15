@@ -6,35 +6,33 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import javax.sql.DataSource;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
+import ru.yandex.clickhouse.ClickHouseDataSource;
+import ru.yandex.clickhouse.settings.ClickHouseProperties;
 
 @Component
-public class HikariDataSourceFactory {
-	private static DataSourceProperties dataSourceProperties;
-	private static Map<String, HikariDataSource> pool = new ConcurrentHashMap<String, HikariDataSource>();
-
+public class DataSourceFactory {
 	@Autowired
-	public HikariDataSourceFactory(DataSourceProperties dataSourceProperties) {
-		HikariDataSourceFactory.dataSourceProperties = dataSourceProperties;
-	}
+	private DataSourceConfig dataSourceConfig;
+	private Map<String, DataSource> pool = new ConcurrentHashMap<String, DataSource>();
 
 	/**
 	 * @param name
 	 * @return
+	 * @throws Exception 
 	 */
-	public static HikariDataSource take(String name) {
-		HikariDataSource ds = null;
+	public DataSource take(String name) throws Exception {
+		DataSource ds = null;
 		if (pool.containsKey(name)) {
 			ds = pool.get(name);
 		} else {
-			Map<String, Map<String, String>> clickhouseMap = dataSourceProperties.getClickhouse();
+			Map<String, Map<String, String>> clickhouseMap = dataSourceConfig.getClickhouse();
 			if (clickhouseMap.containsKey(name)) {
 				Map<String, String> dbinfo = clickhouseMap.get(name);
-				HikariConfig config = new HikariConfig();
 				String host = dbinfo.get("host");
 				String port = dbinfo.get("port");
 				String username = dbinfo.get("username");
@@ -43,6 +41,18 @@ public class HikariDataSourceFactory {
 				if (schema == null) {
 					schema = name;
 				}
+				String url = "jdbc:clickhouse://" + host + ":" + port + "/" + schema;
+				ClickHouseProperties properties = new ClickHouseProperties();
+//				properties.setClientName(name);
+				properties.setUser(username);
+				properties.setPassword(password);
+
+				properties.setSessionId(name);
+				properties.setMaxInsertBlockSize(valueOrDefaultLong(dbinfo.get("maxInsertBlockSize"), 33554432L));
+				properties.setMaxTotal(valueOrDefaultInt(dbinfo.get("maxTotal"), 10));
+
+				ds = new ClickHouseDataSource(url, properties);
+				
 				String cachePrepStmts = dbinfo.get("cachePrepStmts");
 				String prepStmtCacheSize = dbinfo.get("prepStmtCacheSize");
 				String prepStmtCacheSqlLimit = dbinfo.get("prepStmtCacheSqlLimit");
@@ -67,7 +77,7 @@ public class HikariDataSourceFactory {
 						valueOrDefaultLong(dbinfo.get("leakDetectionThreshold"), MINUTES.toMillis(5)));
 				config.setMaxLifetime(valueOrDefaultLong(dbinfo.get("maxLifetime"), MINUTES.toMillis(30)));
 				config.setValidationTimeout(valueOrDefaultLong(dbinfo.get("validationTimeout"), SECONDS.toMillis(5)));
-				ds = new HikariDataSource(config);
+				ds = BasicDataSourceFactory.createDataSource(null);
 				pool.put(name, ds);
 			}
 		}
@@ -86,9 +96,9 @@ public class HikariDataSourceFactory {
 		return val == null ? def : Long.parseLong(val);
 	}
 
-	public static HostInfo getHostInfo(String name) {
+	public HostInfo getHostInfo(String name) {
 		HostInfo result = null;
-		Map<String, Map<String, String>> clickhouseMap = dataSourceProperties.getClickhouse();
+		Map<String, Map<String, String>> clickhouseMap = dataSourceConfig.getClickhouse();
 		if (clickhouseMap.containsKey(name)) {
 			Map<String, String> dbinfo = clickhouseMap.get(name);
 			String host = dbinfo.get("host");

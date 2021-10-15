@@ -7,7 +7,7 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.welyss.mysqlsync.db.HikariDataSourceFactory;
+import org.welyss.mysqlsync.db.DataSourceFactory;
 import org.welyss.mysqlsync.db.MySQLHandler;
 import org.welyss.mysqlsync.db.MySQLHandlerImpl;
 
@@ -20,7 +20,7 @@ public class Target {
 
 	public Target(String name) {
 		this.name = name;
-		tMySQLHandler = new MySQLHandlerImpl(name, HikariDataSourceFactory.take(name));
+		tMySQLHandler = new MySQLHandlerImpl(name, DataSourceFactory.take(name));
 	}
 
 	public void start() {

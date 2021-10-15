@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @ConfigurationProperties(prefix = "datasource")
-public class DataSourceProperties {
+public class DataSourceConfig {
 	private Map<String, Map<String, String>> clickhouse;
 
 	public Map<String, Map<String, String>> getClickhouse() {
