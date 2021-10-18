@@ -7,16 +7,22 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+@Component
 public class TableMetaCache {
 	private static Map<String, SoftReference<MySQLTable>> cache = new HashMap<String, SoftReference<MySQLTable>>();
+	@Autowired
+	private CHDataSourceFactory cHDataSourceFactory;
 
-	public static MySQLTable get(String dbnm, String tablenm) {
+	public MySQLTable get(String dbnm, String tablenm) throws Exception {
 		MySQLTable table;
 		String uniname = dbnm + '.' + tablenm;
 		SoftReference<MySQLTable> tableRef = cache.get(uniname);
 		if (tableRef == null || (table = tableRef.get()) == null) {
 			// generate table meta info from mysql
-			MySQLHandlerImpl handler = new MySQLHandlerImpl(dbnm, DataSourceFactory.take(dbnm));
+			CHHandlerImpl handler = new CHHandlerImpl(dbnm, cHDataSourceFactory.take(dbnm));
 			try {
 				// | Field       | Type         | Null | Key | Default | Extra |
 				List<Map<String, Object>> meta = handler.queryForMaps("DESC `" + tablenm + "`");

@@ -1,8 +1,13 @@
 datasource:
-  clickhouse:
-    bkdb:
-      host: 10.0.29.30
-      port: 9004
-      username: wuysh
-      password: wys19851011
-      schema: wystest
+  bkdb:
+    host: 10.0.29.30
+    port: 8123
+    username: wuysh
+    password: wys19851011
+    schema: wystest
+  acdb:
+    host: localhost
+    port: 3306
+    username: wuysh
+    password: wys19851011
+    schema: acdb

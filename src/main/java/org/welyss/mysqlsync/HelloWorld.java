@@ -13,7 +13,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.welyss.mysqlsync.db.DataSourceConfig;
+import org.welyss.mysqlsync.db.CHDataSourceConfig;
 
 @RestController
 @SpringBootApplication
@@ -27,7 +27,7 @@ public class HelloWorld {
 	private AutowireCapableBeanFactory beanFactory;
 
 	@Autowired
-	private DataSourceConfig yamlProperties;
+	private CHDataSourceConfig yamlProperties;
 
 	@Bean
 	public ExitCodeGenerator exitCodeGenerator() {
@@ -38,7 +38,7 @@ public class HelloWorld {
 
 	@RequestMapping("/")
 	String home() {
-		yamlProperties.getClickhouse().entrySet().forEach((e) -> {
+		yamlProperties.getDatasource().entrySet().forEach((e) -> {
 			System.out.println(e.getKey() + ":");
 			e.getValue().entrySet().forEach((ev)->{
 				System.out.println(ev.getKey() + ": " + ev.getValue());

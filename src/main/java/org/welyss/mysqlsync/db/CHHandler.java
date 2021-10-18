@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 
-public interface MySQLHandler {
+public interface CHHandler {
 	public List<Map<String, Object>> queryForMaps(String sql, Object... args)
 			throws SQLException;
 
@@ -14,12 +14,6 @@ public interface MySQLHandler {
 	public int update(String sql, Object... params) throws SQLException;
 
 	public int executeInTransaction(Map<String, List<Object[]>> queue) throws SQLException;
-
-	public String getJdbcUrl();
-
-	public String getUsername();
-
-	public String getPassword();
 
 	public String getSchema();
 }

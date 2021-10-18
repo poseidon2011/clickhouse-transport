@@ -15,39 +15,19 @@ import java.util.Map.Entry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.zaxxer.hikari.HikariDataSource;
+import ru.yandex.clickhouse.ClickHouseDataSource;
 
-public class MySQLHandlerImpl implements MySQLHandler {
+public class CHHandlerImpl implements CHHandler {
 	public static final int SQL_EXP_DUPLI = 0x0426;
 	public static final int SQL_EXP_TAB_NOT_EXISTS = 0x047A;
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(MySQLHandler.class);
-	private HikariDataSource ds;
+	private static final Logger LOGGER = LoggerFactory.getLogger(CHHandler.class);
+	private ClickHouseDataSource ds;
 	private String name;
 
-	public MySQLHandlerImpl(String name, HikariDataSource ds) {
+	public CHHandlerImpl(String name, ClickHouseDataSource ds) {
 		this.name = name;
 		this.ds = ds;
-	}
-
-	@Override
-	public String getJdbcUrl() {
-		return ds.getJdbcUrl();
-	}
-
-	@Override
-	public String getPassword() {
-		return ds.getPassword();
-	}
-
-	@Override
-	public String getUsername() {
-		return ds.getUsername();
-	}
-
-	@Override
-	public String getSchema() {
-		return ds.getSchema();
 	}
 
 	public String getName() {
@@ -56,6 +36,11 @@ public class MySQLHandlerImpl implements MySQLHandler {
 
 	public void setName(String name) {
 		this.name = name;
+	}
+
+	@Override
+	public String getSchema() {
+		return ds.getDatabase();
 	}
 
 	@Override
