@@ -14,8 +14,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
-import org.welyss.mysqlsync.db.CHDataSourceFactory;
-import org.welyss.mysqlsync.db.CHHandlerImpl;
+import org.welyss.mysqlsync.transport.CHDataSourceFactory;
+import org.welyss.mysqlsync.transport.CHHandlerImpl;
+import org.welyss.mysqlsync.transport.Source;
+import org.welyss.mysqlsync.transport.Target;
 
 @Component
 public class TargetManager implements CommandLineRunner {

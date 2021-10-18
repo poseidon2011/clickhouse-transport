@@ -3,6 +3,7 @@ package org.welyss.mysqlsync;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.welyss.mysqlsync.transport.Target;
 
 import com.google.code.or.OpenReplicator;
 import com.google.code.or.binlog.BinlogEventListener;

@@ -1,4 +1,4 @@
-package org.welyss.mysqlsync;
+package org.welyss.mysqlsync.transport;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -6,7 +6,6 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import org.welyss.mysqlsync.db.CHHandler;
 
 @Component
 public class Target {

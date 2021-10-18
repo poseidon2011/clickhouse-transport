@@ -1,4 +1,4 @@
-package org.welyss.mysqlsync;
+package org.welyss.mysqlsync.transport;
 
 import java.math.BigDecimal;
 import java.time.format.DateTimeParseException;
@@ -15,13 +15,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import org.welyss.mysqlsync.db.CHDataSourceFactory;
-import org.welyss.mysqlsync.db.CHDataSourceFactory.HostInfo;
-import org.welyss.mysqlsync.db.CHExecutor;
-import org.welyss.mysqlsync.db.MySQLColumn;
-import org.welyss.mysqlsync.db.MySQLQueue;
-import org.welyss.mysqlsync.db.MySQLTable;
-import org.welyss.mysqlsync.db.TableMetaCache;
+import org.welyss.mysqlsync.BinlogParser;
+import org.welyss.mysqlsync.CommonUtils;
+import org.welyss.mysqlsync.Parser;
+import org.welyss.mysqlsync.transport.CHDataSourceFactory.HostInfo;
 
 import com.google.code.or.binlog.BinlogEventListener;
 import com.google.code.or.binlog.BinlogEventV4;
@@ -45,7 +42,7 @@ public class Source {
 	protected String name;
 	protected Target target;
 	protected Set<String> syncTables = new HashSet<String>();
-	private Parser parser;
+	protected Parser parser;
 	private final Logger log = LoggerFactory.getLogger(getClass());
 	private CHExecutor chExecutor;
 	private boolean running = false;
@@ -273,19 +270,18 @@ public class Source {
 								queues.put(table.name, queue);
 							}
 							// exec
-							if (confict(queue.lastType, sqlType)) {
-								try {
-									log.debug("[{}-{}: {}] buffer full, executing, taskQuene.total is [{}].", name, target.name, table.name, queue.count);
-									chExecutor.execute(queue);
-									chExecutor.savepoint(parser.getLogPos(), parser.getLogTimestamp(), id);
-								} catch (Exception e) {
-									log.error("cause an exception when chExecutor.exec, reason is [{}]", e);
-									throw new RuntimeException(e);
-								}
-							}
 							if (sql != null) {
 								// lock start
 								synchronized (queue) {
+									if (confict(queue.lastType, sqlType)) {
+										try {
+											log.debug("[{}-{}: {}] buffer full, executing, taskQuene.total is [{}].", name, target.name, table.name, queue.count);
+											chExecutor.execute(queue);
+										} catch (Exception e) {
+											log.error("cause an exception when chExecutor.exec, reason is [{}]", e);
+											throw new RuntimeException(e);
+										}
+									}
 									log.debug("task[{}-{}-{}] in source lock.", name, target.name, table.name);
 									// add task
 									Map<String, List<Object[]>> query = null;
@@ -302,12 +298,12 @@ public class Source {
 									}
 									addQueue(sql, params, query);
 									queue.count++;
+									// update log position
+									parser.setLogPos(beh.getNextPosition());
+									parser.setLogTimestamp(event.getHeader().getTimestamp());
+									queue.lastType = sqlType;
 								}
 								// lock end
-								// update log position
-								parser.setLogPos(beh.getNextPosition());
-								parser.setLogTimestamp(event.getHeader().getTimestamp());
-								queue.lastType = sqlType;
 							}
 						} catch (Exception e) {
 							log.error("cause an exception when onEvents, reason is [{}]", e);
@@ -322,12 +318,12 @@ public class Source {
 			// parser start
 			parser.start();
 			// executor start
-			chExecutor = new CHExecutor(name, target.tMySQLHandler);
+			chExecutor = new CHExecutor(this, target.tMySQLHandler);
 			chExecutor.start();
 			// mark running
 			running = true;
 		} catch (Exception e) {
-			log.error("", e);
+			log.error("cause exception when parser/chExecutor start, msg: {}", e);
 			parser.stop();
 			chExecutor.stop();
 			throw e;
@@ -337,6 +333,7 @@ public class Source {
 	public void stop() throws Exception {
 		parser.stop();
 		chExecutor.stop();
+		running = false;
 	}
 
 	public boolean isRunning() {

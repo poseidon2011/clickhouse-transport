@@ -1,4 +1,4 @@
-package org.welyss.mysqlsync.db;
+package org.welyss.mysqlsync.transport;
 
 import java.util.HashMap;
 import java.util.List;

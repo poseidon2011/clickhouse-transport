@@ -1,4 +1,4 @@
-package org.welyss.mysqlsync.db;
+package org.welyss.mysqlsync.transport;
 
 import java.lang.ref.SoftReference;
 import java.sql.SQLException;

@@ -1,4 +1,4 @@
-package org.welyss.mysqlsync.db;
+package org.welyss.mysqlsync.transport;
 
 public class MySQLColumn {
 	public int order;

@@ -1,4 +1,4 @@
-package org.welyss.mysqlsync.db;
+package org.welyss.mysqlsync.transport;
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
 import org.welyss.mysqlsync.CommonUtils;
 
 public class CHExecutor implements Executor, Runnable {
-	protected String name;
+	protected Source source;
 	private Map<String, MySQLQueue> querys = new HashMap<String, MySQLQueue>();
 	private CHHandler handler;
 	private CompletionService<Integer> queryExecutor;
@@ -25,16 +25,15 @@ public class CHExecutor implements Executor, Runnable {
 	private boolean running = false;
 	private final Logger log = LoggerFactory.getLogger(getClass());
 
-	public CHExecutor(String name, CHHandler tMySQLHandler) {
-		this.name = name;
+	public CHExecutor(Source source, CHHandler tMySQLHandler) {
+		this.source = source;
 		this.handler = tMySQLHandler;
-		queryExecutor = new ExecutorCompletionService<Integer>(
-				new ThreadPoolExecutor(3, 6, 60L, TimeUnit.SECONDS, new SynchronousQueue<Runnable>()));
+		queryExecutor = new ExecutorCompletionService<Integer>(new ThreadPoolExecutor(3, 6, 60L, TimeUnit.SECONDS, new SynchronousQueue<Runnable>()));
 	}
 
 	public void start() {
 		running = true;
-		executor = new Thread(this, name);
+		executor = new Thread(this, source.name);
 		executor.start();
 	}
 
@@ -55,12 +54,12 @@ public class CHExecutor implements Executor, Runnable {
 						try {
 							execute(queue);
 						} catch (Exception e) {
-							log.error("cause exception when executor: [{}-{}] execute, {}", name, table, e);
+							log.error("cause exception when executor: [{}-{}] execute, {}", source.name, table, e);
 						}
 						try {
 							Thread.sleep(10000);
 						} catch (InterruptedException e) {
-							log.warn("cause exception when executor: [{}] sleep, {}", name, e);
+							log.warn("cause exception when executor: [{}] sleep, {}", source.name, e);
 						}
 					}
 				}
@@ -69,7 +68,7 @@ public class CHExecutor implements Executor, Runnable {
 			try {
 				Thread.sleep(10000);
 			} catch (InterruptedException e) {
-				log.warn("cause exception when executor: [{}-{}] sleep, {}", name, e);
+				log.warn("cause exception when executor: [{}-{}] sleep, {}", source.name, e);
 			}
 		}
 	}
@@ -94,6 +93,7 @@ public class CHExecutor implements Executor, Runnable {
 				queryExecutor.take();
 			}
 			query.clear();
+			savepoint(source.parser.getLogPos(), source.parser.getLogTimestamp(), source.id);
 		}
 	}
 
@@ -107,14 +107,6 @@ public class CHExecutor implements Executor, Runnable {
 		} else {
 			handler.update("UPDATE ch_syncdata_savepoints SET log_file=?,log_pos=?,log_timestamp=? WHERE id=?", logFile, logPos, logTimestamp, id);
 		}
-	}
-
-	public String getName() {
-		return name;
-	}
-
-	public void setName(String name) {
-		this.name = name;
 	}
 
 	public Map<String, MySQLQueue> getQuerys() {
