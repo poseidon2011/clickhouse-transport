@@ -14,10 +14,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
-import org.welyss.mysqlsync.transport.CHDataSourceFactory;
-import org.welyss.mysqlsync.transport.CHHandlerImpl;
-import org.welyss.mysqlsync.transport.Source;
-import org.welyss.mysqlsync.transport.Target;
+import org.welyss.mysqlsync.transport.DataSourceFactory;
+import org.welyss.mysqlsync.transport.CHHandler;
 
 @Component
 public class TargetManager implements CommandLineRunner {
@@ -31,7 +29,7 @@ public class TargetManager implements CommandLineRunner {
 	@Autowired
 	private AutowireCapableBeanFactory beanFactory;
 	@Autowired
-	private CHDataSourceFactory cHDataSourceFactory;
+	private DataSourceFactory cHDataSourceFactory;
 
 	@Value("${sync.working.clickhouses}")
 	private String clickhouses;
@@ -54,7 +52,7 @@ public class TargetManager implements CommandLineRunner {
 							target = new Target();
 							beanFactory.autowireBean(target);
 							target.name = ch;
-							target.tMySQLHandler = new CHHandlerImpl(ch, cHDataSourceFactory.take(ch));
+							target.tCHHandler = new CHHandler(ch, cHDataSourceFactory.take(ch));
 							targetPool.put(ch, target);
 						} catch (Exception e) {
 							log.warn("cause exception when new target, msg: {}", e);
@@ -64,7 +62,7 @@ public class TargetManager implements CommandLineRunner {
 
 					// process source
 					try {
-						List<Map<String, Object>> sources = target.tMySQLHandler.queryForMaps("SELECT id, sync_db, log_file, log_pos, log_timestamp FROM ch_syncdata_savepoints");
+						List<Map<String, Object>> sources = target.tCHHandler.queryForMaps("SELECT id, sync_db, log_file, log_pos, log_timestamp FROM ch_syncdata_savepoints");
 						for (int i = 0; i < sources.size(); i++) {
 							Map<String, Object> sourceRow = sources.get(i);
 							String syncDb = sourceRow.get("sync_db").toString();
@@ -84,7 +82,7 @@ public class TargetManager implements CommandLineRunner {
 
 							// process source table
 							try {
-								target.tMySQLHandler.queryForMaps("SELECT sync_table FROM ch_syncdata_detail WHERE sp_id=?", source.id).forEach((map)->{
+								target.tCHHandler.queryForMaps("SELECT sync_table FROM ch_syncdata_detail WHERE sp_id=?", source.id).forEach((map)->{
 									String table = map.get("sync_table").toString();
 									Set<String> sync = source.syncTables;
 									if (!sync.contains(table)) {
@@ -98,7 +96,7 @@ public class TargetManager implements CommandLineRunner {
 
 							String logFile = sourceRow.get("log_file").toString();
 							long logPos = Long.parseLong(sourceRow.get("log_pos").toString());
-							Object logTimestampObj = sourceRow.get("log_pos");
+							Object logTimestampObj = sourceRow.get("log_timestamp");
 							Long logTimestamp = null;
 							if (logTimestampObj != null) {
 								logTimestamp = Long.parseLong(logTimestampObj.toString());

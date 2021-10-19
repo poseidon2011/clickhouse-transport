@@ -12,20 +12,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import javax.sql.DataSource;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import ru.yandex.clickhouse.ClickHouseDataSource;
-
-public class CHHandlerImpl implements CHHandler {
+public class MySQLHandler implements Handler {
 	public static final int SQL_EXP_DUPLI = 0x0426;
 	public static final int SQL_EXP_TAB_NOT_EXISTS = 0x047A;
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(CHHandler.class);
-	private ClickHouseDataSource ds;
+	private static final Logger LOGGER = LoggerFactory.getLogger(Handler.class);
+	private DataSource ds;
 	private String name;
 
-	public CHHandlerImpl(String name, ClickHouseDataSource ds) {
+	public MySQLHandler(String name, DataSource ds) {
 		this.name = name;
 		this.ds = ds;
 	}
@@ -36,11 +36,6 @@ public class CHHandlerImpl implements CHHandler {
 
 	public void setName(String name) {
 		this.name = name;
-	}
-
-	@Override
-	public String getSchema() {
-		return ds.getDatabase();
 	}
 
 	@Override

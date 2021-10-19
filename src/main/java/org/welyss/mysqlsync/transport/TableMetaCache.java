@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 public class TableMetaCache {
 	private static Map<String, SoftReference<MySQLTable>> cache = new HashMap<String, SoftReference<MySQLTable>>();
 	@Autowired
-	private CHDataSourceFactory cHDataSourceFactory;
+	private DataSourceFactory cHDataSourceFactory;
 
 	public MySQLTable get(String dbnm, String tablenm) throws Exception {
 		MySQLTable table;
@@ -22,7 +22,7 @@ public class TableMetaCache {
 		SoftReference<MySQLTable> tableRef = cache.get(uniname);
 		if (tableRef == null || (table = tableRef.get()) == null) {
 			// generate table meta info from mysql
-			CHHandlerImpl handler = new CHHandlerImpl(dbnm, cHDataSourceFactory.take(dbnm));
+			MySQLHandler handler = new MySQLHandler(dbnm, cHDataSourceFactory.takeMysql(dbnm));
 			try {
 				// | Field       | Type         | Null | Key | Default | Extra |
 				List<Map<String, Object>> meta = handler.queryForMaps("DESC `" + tablenm + "`");

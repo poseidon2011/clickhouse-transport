@@ -2,16 +2,11 @@ package org.welyss.mysqlsync;
 
 import java.util.concurrent.TimeUnit;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.welyss.mysqlsync.transport.Target;
-
 import com.google.code.or.OpenReplicator;
 import com.google.code.or.binlog.BinlogEventListener;
 
 public class BinlogParser implements Parser {
 	private OpenReplicator parser;
-	@Value("${base.server.id}")
-	private int baseServerId;
 	public String logFile;
 	public long logPos;
 	public Long logTimestamp;
@@ -23,7 +18,7 @@ public class BinlogParser implements Parser {
 		parser.setUser(user);
 		parser.setPassword(password);
 		parser.setThreadNm(name);
-		parser.setServerId(baseServerId + id);
+		parser.setServerId(id);
 		parser.setEncoding(Target.ENCODING_UTF_8);
 		parser.setBinlogFileName(logFile);
 		parser.setBinlogPosition(logPos);

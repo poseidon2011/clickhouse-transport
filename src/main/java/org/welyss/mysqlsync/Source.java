@@ -1,4 +1,4 @@
-package org.welyss.mysqlsync.transport;
+package org.welyss.mysqlsync;
 
 import java.math.BigDecimal;
 import java.time.format.DateTimeParseException;
@@ -14,11 +14,13 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.welyss.mysqlsync.BinlogParser;
-import org.welyss.mysqlsync.CommonUtils;
-import org.welyss.mysqlsync.Parser;
-import org.welyss.mysqlsync.transport.CHDataSourceFactory.HostInfo;
+import org.welyss.mysqlsync.transport.DataSourceFactory;
+import org.welyss.mysqlsync.transport.DataSourceFactory.HostInfo;
+import org.welyss.mysqlsync.transport.MySQLColumn;
+import org.welyss.mysqlsync.transport.MySQLTable;
+import org.welyss.mysqlsync.transport.TableMetaCache;
 
 import com.google.code.or.binlog.BinlogEventListener;
 import com.google.code.or.binlog.BinlogEventV4;
@@ -26,6 +28,7 @@ import com.google.code.or.binlog.BinlogEventV4Header;
 import com.google.code.or.binlog.impl.event.AbstractRowEvent;
 import com.google.code.or.binlog.impl.event.DeleteRowsEvent;
 import com.google.code.or.binlog.impl.event.DeleteRowsEventV2;
+import com.google.code.or.binlog.impl.event.RotateEvent;
 import com.google.code.or.binlog.impl.event.UpdateRowsEvent;
 import com.google.code.or.binlog.impl.event.UpdateRowsEventV2;
 import com.google.code.or.binlog.impl.event.WriteRowsEvent;
@@ -46,9 +49,11 @@ public class Source {
 	private final Logger log = LoggerFactory.getLogger(getClass());
 	private CHExecutor chExecutor;
 	private boolean running = false;
+	@Value("${base.server.id}")
+	private int baseServerId;
 
 	@Autowired
-	private CHDataSourceFactory dataSourceFactory;
+	private DataSourceFactory dataSourceFactory;
 	@Autowired
 	private TableMetaCache tableMetaCache;
 
@@ -70,12 +75,16 @@ public class Source {
 					result = val;
 				} else {
 					try {
-						result = CommonUtils.parseDate(val.toString());
+						result = CommonUtils.parseDateShort(val.toString());
 					} catch (DateTimeParseException e) {
-						log.warn("from is [{}], to is [{}], table is [{}], columnInfo.name is [{}], columnInfo.type is [{}], val of class is [{}], val is [{}], {}",
-								name, target.name, table.name, column.name, column.type,
-								val.getClass().getName(), val, e);
-						result = val;
+						try {
+							result = CommonUtils.parseDate(val.toString());
+						} catch (DateTimeParseException dtpe) {
+							log.warn("from is [{}], to is [{}], table is [{}], columnInfo.name is [{}], columnInfo.type is [{}], val of class is [{}], val is [{}], {}",
+									name, target.name, table.name, column.name, column.type,
+									val.getClass().getName(), val, e);
+							result = val;
+						}
 					}
 				}
 			} else if (column.type.endsWith("unsigned")) {
@@ -128,7 +137,7 @@ public class Source {
 	public void start(String logFile, long logPos, long logTimestamp) throws Exception {
 		log.info("Source: {}-{} start.", name, target.name);
 		HostInfo hostInfo = dataSourceFactory.getHostInfo(name);
-		parser = new BinlogParser(id, name + "-" + target.name, hostInfo.host, hostInfo.port == null ? DEFAULT_MYSQL_PORT : hostInfo.port, hostInfo.username, hostInfo.password, logFile, logPos, logTimestamp);
+		parser = new BinlogParser(baseServerId + id, name + "-" + target.name, hostInfo.host, hostInfo.port == null ? DEFAULT_MYSQL_PORT : hostInfo.port, hostInfo.username, hostInfo.password, logFile, logPos, logTimestamp);
 		parser.setBinlogEventListener(new BinlogEventListener() {
 			@Override
 			public void onEvents(BinlogEventV4 event) {
@@ -226,7 +235,7 @@ public class Source {
 													sb.append(itci.next().name).append(",");
 												}
 												log.error("target table:[{}.{}] tableInfo.columns: {}=>[{}] compare with binlog.columns size: {}."
-														, target.tMySQLHandler.getSchema(), table.name, table.columns.size(), sb, columns.size());
+														, target.tCHHandler.getSchema(), table.name, table.columns.size(), sb, columns.size());
 												throw ioobe;
 											}
 										}
@@ -261,22 +270,31 @@ public class Source {
 								}
 							}
 							// get query and ready to execute
-							MySQLQueue queue;
-							Map<String, MySQLQueue> queues = chExecutor.getQuerys();
-							if (queues.containsKey(table.name)) {
-								queue = queues.get(table.name);
+							MySQLQueue queues = chExecutor.getQueues();
+							Map<String, MySQLTableQueue> tableQueues = queues.tableQueues;
+							MySQLTableQueue tableQueue;
+							if (tableQueues.containsKey(table.name)) {
+								tableQueue = tableQueues.get(table.name);
 							} else {
-								queue = new MySQLQueue();
-								queues.put(table.name, queue);
+								tableQueue = new MySQLTableQueue();
+								tableQueues.put(table.name, tableQueue);
 							}
 							// exec
 							if (sql != null) {
 								// lock start
-								synchronized (queue) {
-									if (confict(queue.lastType, sqlType)) {
+								synchronized (queues) {
+									if (confict(tableQueue.lastType, sqlType)) {
 										try {
-											log.debug("[{}-{}: {}] buffer full, executing, taskQuene.total is [{}].", name, target.name, table.name, queue.count);
-											chExecutor.execute(queue);
+											log.debug("[{}-{}: {}] confict, executing, taskQuene.total is [{}].", name, target.name, table.name, tableQueue.count);
+											chExecutor.execute();
+										} catch (Exception e) {
+											log.error("cause an exception when chExecutor.exec, reason is [{}]", e);
+											throw new RuntimeException(e);
+										}
+									} else if (tableQueue.count >= CommonUtils.bufferSize) {
+										try {
+											log.debug("[{}-{}: {}] buffer full, executing, taskQuene.total is [{}].", name, target.name, table.name, tableQueue.count);
+											chExecutor.execute();
 										} catch (Exception e) {
 											log.error("cause an exception when chExecutor.exec, reason is [{}]", e);
 											throw new RuntimeException(e);
@@ -287,27 +305,41 @@ public class Source {
 									Map<String, List<Object[]>> query = null;
 									switch (sqlType) {
 									case MySQLQueue.QUERY_TYPE_INSERT:
-										query = queue.insert;
+										query = tableQueue.insert;
 										break;
 									case MySQLQueue.QUERY_TYPE_DELETE:
-										query = queue.delete;
+										query = tableQueue.delete;
 										break;
 									case MySQLQueue.QUERY_TYPE_UPDATE:
-										query = queue.update;
+										query = tableQueue.update;
 										break;
 									}
 									addQueue(sql, params, query);
-									queue.count++;
+									tableQueue.count++;
+									queues.count++;
 									// update log position
 									parser.setLogPos(beh.getNextPosition());
 									parser.setLogTimestamp(event.getHeader().getTimestamp());
-									queue.lastType = sqlType;
+									tableQueue.lastType = sqlType;
 								}
 								// lock end
 							}
 						} catch (Exception e) {
 							log.error("cause an exception when onEvents, reason is [{}]", e);
 							throw new RuntimeException(e);
+						}
+					}
+				} else if (MySQLConstants.ROTATE_EVENT == type) {
+					final RotateEvent re = (RotateEvent)event;
+					MySQLQueue queues = chExecutor.getQueues();
+					synchronized (queues) {
+						while (true) {
+							try {
+								chExecutor.execute();
+								chExecutor.savepoint(re.getBinlogFileName().toString(), re.getBinlogPosition(), re.getHeader().getTimestamp(), id);
+							} catch (Exception e) {
+								log.warn("cause an exception when rotate execute/savepoint, reason: {}", e);
+							}
 						}
 					}
 				}
@@ -318,7 +350,7 @@ public class Source {
 			// parser start
 			parser.start();
 			// executor start
-			chExecutor = new CHExecutor(this, target.tMySQLHandler);
+			chExecutor = new CHExecutor(this, target.tCHHandler);
 			chExecutor.start();
 			// mark running
 			running = true;
