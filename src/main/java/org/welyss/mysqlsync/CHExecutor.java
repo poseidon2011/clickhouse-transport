@@ -24,9 +24,9 @@ public class CHExecutor implements Executor, Runnable {
 	private boolean running = false;
 	private final Logger log = LoggerFactory.getLogger(getClass());
 
-	public CHExecutor(Source source, Handler tMySQLHandler) {
+	public CHExecutor(Source source, Handler tCHHandler) {
 		this.source = source;
-		this.handler = tMySQLHandler;
+		this.handler = tCHHandler;
 		queryExecutor = new ExecutorCompletionService<Integer>(
 				new ThreadPoolExecutor(3, 6, 60L, TimeUnit.SECONDS, new SynchronousQueue<Runnable>()));
 	}
@@ -58,29 +58,32 @@ public class CHExecutor implements Executor, Runnable {
 	@Override
 	public void execute() throws Exception {
 		synchronized (queues) {
-			Iterator<Entry<String, MySQLTableQueue>> queryIt = queues.tableQueues.entrySet().iterator();
-			while (queryIt.hasNext()) {
-				Entry<String, MySQLTableQueue> entry = queryIt.next();
-				MySQLTableQueue tableQueue = entry.getValue();
-				int taskCnt = 0;
-				if (tableQueue.insert.size() > 0) {
-					queryExecutor.submit(new Task(tableQueue.insert));
-					taskCnt++;
+			if (queues.count > 0) {
+				Iterator<Entry<String, MySQLTableQueue>> queryIt = queues.tableQueues.entrySet().iterator();
+				while (queryIt.hasNext()) {
+					Entry<String, MySQLTableQueue> entry = queryIt.next();
+					MySQLTableQueue tableQueue = entry.getValue();
+					int taskCnt = 0;
+					if (tableQueue.insert.size() > 0) {
+						queryExecutor.submit(new Task(tableQueue.insert));
+						taskCnt++;
+					}
+					if (tableQueue.delete.size() > 0) {
+						queryExecutor.submit(new Task(tableQueue.delete));
+						taskCnt++;
+					}
+					if (tableQueue.update.size() > 0) {
+						queryExecutor.submit(new Task(tableQueue.update));
+						taskCnt++;
+					}
+					for (int i = 0; i < taskCnt; i++) {
+						Integer result = queryExecutor.take().get();
+						System.out.println(result);
+					}
 				}
-				if (tableQueue.delete.size() > 0) {
-					queryExecutor.submit(new Task(tableQueue.delete));
-					taskCnt++;
-				}
-				if (tableQueue.update.size() > 0) {
-					queryExecutor.submit(new Task(tableQueue.update));
-					taskCnt++;
-				}
-				for (int i = 0; i < taskCnt; i++) {
-					queryExecutor.take();
-				}
+				queues.clear();
+				savepoint(source.parser.getLogPos(), source.parser.getLogTimestamp(), source.id);
 			}
-			queues.clear();
-			savepoint(source.parser.getLogPos(), source.parser.getLogTimestamp(), source.id);
 		}
 	}
 
@@ -90,11 +93,9 @@ public class CHExecutor implements Executor, Runnable {
 
 	public void savepoint(String logFile, long logPos, long logTimestamp, int id) throws Exception {
 		if (logFile == null) {
-			handler.update("UPDATE ch_syncdata_savepoints SET log_pos=?,log_timestamp=? WHERE id=?", logPos,
-					logTimestamp, id);
+			handler.update("ALTER TABLE `ch_syncdata_savepoints` UPDATE log_pos=?,log_timestamp=? WHERE id=?", logPos, logTimestamp, id);
 		} else {
-			handler.update("UPDATE ch_syncdata_savepoints SET log_file=?,log_pos=?,log_timestamp=? WHERE id=?", logFile,
-					logPos, logTimestamp, id);
+			handler.update("ALTER TABLE `ch_syncdata_savepoints` UPDATE log_file=?,log_pos=?,log_timestamp=? WHERE id=?", logFile, logPos, logTimestamp, id);
 		}
 	}
 
@@ -107,9 +108,9 @@ public class CHExecutor implements Executor, Runnable {
 	}
 
 	class Task implements Callable<Integer> {
-		private Map<String, List<Object[]>> queue;
+		private Map<String, List<List<Object>>> queue;
 
-		public Task(Map<String, List<Object[]>> queue) {
+		public Task(Map<String, List<List<Object>>> queue) {
 			this.queue = queue;
 		}
 

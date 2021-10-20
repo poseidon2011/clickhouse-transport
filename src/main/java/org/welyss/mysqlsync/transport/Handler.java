@@ -13,5 +13,5 @@ public interface Handler {
 
 	public int update(String sql, Object... params) throws SQLException;
 
-	public int executeInTransaction(Map<String, List<Object[]>> queue) throws SQLException;
+	public int executeInTransaction(Map<String, List<List<Object>>> queue) throws SQLException;
 }

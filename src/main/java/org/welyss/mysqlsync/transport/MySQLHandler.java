@@ -101,20 +101,20 @@ public class MySQLHandler implements Handler {
 	}
 
 	@Override
-	public int executeInTransaction(Map<String, List<Object[]>> queue) throws SQLException {
+	public int executeInTransaction(Map<String, List<List<Object>>> queue) throws SQLException {
 		int result = 0;
 		try (Connection conn = getConnection(false)) {
 			try {
-				Iterator<Entry<String, List<Object[]>>> queueIt = queue.entrySet().iterator();
+				Iterator<Entry<String, List<List<Object>>>> queueIt = queue.entrySet().iterator();
 				while (queueIt.hasNext()) {
-					Entry<String, List<Object[]>> row = queueIt.next();
+					Entry<String, List<List<Object>>> row = queueIt.next();
 					String sql = row.getKey();
-					List<Object[]> params = row.getValue();
+					List<List<Object>> params = row.getValue();
 					try (PreparedStatement ps = conn.prepareStatement(sql)) {
 						for (int i = 0; i < params.size(); i++) {
-							Object[] param = params.get(i);
-							for (int j = 0; j < param.length; j++) {
-								Object paramSingle = param[j];
+							List<Object> param = params.get(i);
+							for (int j = 0; j < param.size(); j++) {
+								Object paramSingle = param.get(j);
 								ps.setObject(j + 1, paramSingle);
 							}
 							ps.addBatch();

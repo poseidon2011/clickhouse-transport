@@ -7,18 +7,18 @@ import java.util.Map;
 public class MySQLTableQueue {
 	public byte lastType = -1;
 	public long count = 0;
-	public Map<String, List<Object[]>> insert;
-	public Map<String, List<Object[]>> delete;
-	public Map<String, List<Object[]>> update;
+	public Map<String, List<List<Object>>> insert;
+	public Map<String, List<List<Object>>> delete;
+	public Map<String, List<List<Object>>> update;
 	public MySQLTableQueue() {
-		insert = new HashMap<String, List<Object[]>>();
-		delete = new HashMap<String, List<Object[]>>();
-		update = new HashMap<String, List<Object[]>>();
+		insert = new HashMap<String, List<List<Object>>>();
+		delete = new HashMap<String, List<List<Object>>>();
+		update = new HashMap<String, List<List<Object>>>();
 	}
 	public void clear() {
-		insert = new HashMap<String, List<Object[]>>();
-		delete = new HashMap<String, List<Object[]>>();
-		update = new HashMap<String, List<Object[]>>();
+		insert = new HashMap<String, List<List<Object>>>();
+		delete = new HashMap<String, List<List<Object>>>();
+		update = new HashMap<String, List<List<Object>>>();
 		count = 0;
 		lastType = -1;
 	}

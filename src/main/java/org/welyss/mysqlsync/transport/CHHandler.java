@@ -15,13 +15,14 @@ import java.util.Map.Entry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import ru.yandex.clickhouse.ClickHouseConnection;
 import ru.yandex.clickhouse.ClickHouseDataSource;
 
 public class CHHandler implements Handler {
 	public static final int SQL_EXP_DUPLI = 0x0426;
 	public static final int SQL_EXP_TAB_NOT_EXISTS = 0x047A;
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(Handler.class);
+	private static final Logger log = LoggerFactory.getLogger(Handler.class);
 	private ClickHouseDataSource ds;
 	private String name;
 
@@ -45,7 +46,7 @@ public class CHHandler implements Handler {
 	@Override
 	public List<Map<String, Object>> queryForMaps(String sql, Object... args) throws SQLException {
 		List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
-		try (Connection conn = getConnection(true)) {
+		try (ClickHouseConnection conn = ds.getConnection()) {
 			try (PreparedStatement ps = conn.prepareStatement(sql)) {
 				if (args != null && args.length > 0) {
 					for (int i = 0; i < args.length; i++) {
@@ -74,7 +75,7 @@ public class CHHandler implements Handler {
 	@Override
 	public int update(String sql, List<Object> params) throws SQLException {
 		int result = -1;
-		try (Connection conn = getConnection(true)) {
+		try (Connection conn = ds.getConnection()) {
 			conn.setAutoCommit(true);
 			try (PreparedStatement ps = conn.prepareStatement(sql)) {
 				if (params != null) {
@@ -92,33 +93,35 @@ public class CHHandler implements Handler {
 	@Override
 	public int update(String sql, Object... params) throws SQLException {
 		int result = -1;
-		try (Connection conn = getConnection(true)) {
+		try (Connection conn = ds.getConnection()) {
 			try (PreparedStatement ps = conn.prepareStatement(sql)) {
 				for (int i = 0; i < params.length; i++) {
 					Object param = params[i];
 					ps.setObject(i + 1, param);
 				}
-				result = ps.executeUpdate();
+				ps.addBatch();
+//				result = ps.executeUpdate();
+				result = ps.executeBatch()[0];
 			}
 		}
 		return result;
 	}
 
 	@Override
-	public int executeInTransaction(Map<String, List<Object[]>> queue) throws SQLException {
+	public int executeInTransaction(Map<String, List<List<Object>>> queue) throws SQLException {
 		int result = 0;
-		try (Connection conn = getConnection(false)) {
+		try (Connection conn = ds.getConnection()) {
 			try {
-				Iterator<Entry<String, List<Object[]>>> queueIt = queue.entrySet().iterator();
+				Iterator<Entry<String, List<List<Object>>>> queueIt = queue.entrySet().iterator();
 				while (queueIt.hasNext()) {
-					Entry<String, List<Object[]>> row = queueIt.next();
+					Entry<String, List<List<Object>>> row = queueIt.next();
 					String sql = row.getKey();
-					List<Object[]> params = row.getValue();
+					List<List<Object>> params = row.getValue();
 					try (PreparedStatement ps = conn.prepareStatement(sql)) {
 						for (int i = 0; i < params.size(); i++) {
-							Object[] param = params.get(i);
-							for (int j = 0; j < param.length; j++) {
-								Object paramSingle = param[j];
+							List<Object> param = params.get(i);
+							for (int j = 0; j < param.size(); j++) {
+								Object paramSingle = param.get(j);
 								ps.setObject(j + 1, paramSingle);
 							}
 							ps.addBatch();
@@ -133,16 +136,5 @@ public class CHHandler implements Handler {
 			}
 		}
 		return result;
-	}
-
-	private Connection getConnection(boolean autoCommit) throws SQLException {
-		try {
-			Connection conn = ds.getConnection();
-			conn.setAutoCommit(autoCommit);
-			return conn;
-		} catch (Exception pee) {
-			LOGGER.error("{}", pee);
-			throw pee;
-		}
 	}
 }
