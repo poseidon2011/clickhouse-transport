@@ -222,7 +222,7 @@ public class Source {
 										params.add(param);
 									}
 									if (changed) {
-										sql = "ALTER TABLE `" + table.name + "` UPDATE " + setCause + "WHERE " + whereCause;
+										sql = "ALTER TABLE `" + target.tCHHandler.getDatabase() + "`.`" + table.name + "` UPDATE " + setCause + "WHERE " + whereCause;
 									}
 								}
 							} else if (MySQLConstants.WRITE_ROWS_EVENT == type || MySQLConstants.WRITE_ROWS_EVENT_V2 == type) {
@@ -302,7 +302,7 @@ public class Source {
 										}
 										params.add(param);
 									}
-									sql = "ALTER TABLE `" + table.name + "` DELETE WHERE " + whereCause;
+									sql = "ALTER TABLE `" + target.tCHHandler.getDatabase() + "`.`" + table.name + "` DELETE WHERE " + whereCause;
 								}
 							}
 							// get query and ready to execute

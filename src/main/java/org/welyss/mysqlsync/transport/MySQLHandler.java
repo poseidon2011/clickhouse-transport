@@ -14,6 +14,7 @@ import java.util.Map.Entry;
 
 import javax.sql.DataSource;
 
+import org.apache.commons.dbcp2.BasicDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,6 +37,11 @@ public class MySQLHandler implements Handler {
 
 	public void setName(String name) {
 		this.name = name;
+	}
+
+	@Override
+	public String getDatabase() {
+		return ((BasicDataSource)ds).getDefaultSchema();
 	}
 
 	@Override

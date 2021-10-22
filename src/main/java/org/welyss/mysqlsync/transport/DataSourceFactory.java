@@ -50,7 +50,7 @@ public class DataSourceFactory {
 //				properties.setClientName(name);
 				properties.setUser(username);
 				properties.setPassword(password);
-//				properties.setDatabase(schema);
+				properties.setDatabase(schema);
 				properties.setSessionId(name);
 				properties.setMaxInsertBlockSize(valueOrDefaultLong(dbinfo.get("maxInsertBlockSize"), 33554432L));
 				properties.setMaxTotal(valueOrDefaultInt(dbinfo.get("maxTotal"), 10));

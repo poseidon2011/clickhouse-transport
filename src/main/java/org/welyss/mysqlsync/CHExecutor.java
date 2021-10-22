@@ -93,9 +93,9 @@ public class CHExecutor implements Executor, Runnable {
 
 	public void savepoint(String logFile, long logPos, long logTimestamp, int id) throws Exception {
 		if (logFile == null) {
-			handler.update("ALTER TABLE `ch_syncdata_savepoints` UPDATE log_pos=?,log_timestamp=? WHERE id=?", logPos, logTimestamp, id);
+			handler.update("ALTER TABLE `" + handler.getDatabase() + "`.`ch_syncdata_savepoints` UPDATE log_pos=?,log_timestamp=? WHERE id=?", logPos, logTimestamp, id);
 		} else {
-			handler.update("ALTER TABLE `ch_syncdata_savepoints` UPDATE log_file=?,log_pos=?,log_timestamp=? WHERE id=?", logFile, logPos, logTimestamp, id);
+			handler.update("ALTER TABLE `" + handler.getDatabase() + "`.`ch_syncdata_savepoints` UPDATE log_file=?,log_pos=?,log_timestamp=? WHERE id=?", logFile, logPos, logTimestamp, id);
 		}
 	}
 

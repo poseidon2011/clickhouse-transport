@@ -44,6 +44,11 @@ public class CHHandler implements Handler {
 	}
 
 	@Override
+	public String getDatabase() {
+		return ds.getDatabase();
+	}
+
+	@Override
 	public List<Map<String, Object>> queryForMaps(String sql, Object... args) throws SQLException {
 		List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
 		try (ClickHouseConnection conn = ds.getConnection()) {
@@ -99,9 +104,7 @@ public class CHHandler implements Handler {
 					Object param = params[i];
 					ps.setObject(i + 1, param);
 				}
-				ps.addBatch();
-//				result = ps.executeUpdate();
-				result = ps.executeBatch()[0];
+				result = ps.executeUpdate();
 			}
 		}
 		return result;
