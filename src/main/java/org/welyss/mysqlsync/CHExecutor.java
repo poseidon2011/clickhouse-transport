@@ -59,6 +59,7 @@ public class CHExecutor implements Executor, Runnable {
 	public void execute() throws Exception {
 		synchronized (queues) {
 			if (queues.count > 0) {
+				long elapsed = System.currentTimeMillis();
 				Iterator<Entry<String, MySQLTableQueue>> queryIt = queues.tableQueues.entrySet().iterator();
 				while (queryIt.hasNext()) {
 					Entry<String, MySQLTableQueue> entry = queryIt.next();
@@ -77,10 +78,10 @@ public class CHExecutor implements Executor, Runnable {
 						taskCnt++;
 					}
 					for (int i = 0; i < taskCnt; i++) {
-						Integer result = queryExecutor.take().get();
-						System.out.println(result);
+						queryExecutor.take().get();
 					}
 				}
+				log.info("[{}-{}] sync successful, count: {}, takes {} milliseconds.", source.name, source.target.name, queues.count, System.currentTimeMillis() - elapsed);
 				queues.clear();
 				savepoint(source.parser.getLogPos(), source.parser.getLogTimestamp(), source.id);
 			}

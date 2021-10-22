@@ -257,6 +257,7 @@ public class Source {
 												MySQLColumn column = table.columns.get(j);
 												param.add(formatVal(table, column, columns.get(j).getValue()));
 											}
+											params.add(param);
 										}
 										sql = "INSERT INTO `" + table.name + "`(" + selColumns + ")VALUES(" + sqlVals + ")";
 									} catch (IndexOutOfBoundsException ioobe) {
@@ -351,8 +352,8 @@ public class Source {
 										break;
 									}
 									addQueue(sql, params, query);
-									tableQueue.count++;
-									queues.count++;
+									tableQueue.count += params.size();
+									queues.count += params.size();
 									// update log position
 									parser.setLogPos(beh.getNextPosition());
 									parser.setLogTimestamp(event.getHeader().getTimestamp());
