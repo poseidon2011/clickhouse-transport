@@ -16,9 +16,9 @@ public class MySQLTableQueue {
 		update = new HashMap<String, List<List<Object>>>();
 	}
 	public void clear() {
-		insert = new HashMap<String, List<List<Object>>>();
-		delete = new HashMap<String, List<List<Object>>>();
-		update = new HashMap<String, List<List<Object>>>();
+		insert.clear();
+		delete.clear();
+		update.clear();
 		count = 0;
 		lastType = -1;
 	}

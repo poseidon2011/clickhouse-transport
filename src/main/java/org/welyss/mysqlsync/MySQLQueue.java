@@ -1,6 +1,7 @@
 package org.welyss.mysqlsync;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 public class MySQLQueue {
@@ -11,7 +12,13 @@ public class MySQLQueue {
 	protected int count;
 
 	public void clear() {
-		tableQueues = new HashMap<String, MySQLTableQueue>();
+		Iterator<MySQLTableQueue> queuesIt = tableQueues.values().iterator();
+		while (queuesIt.hasNext()) {
+			MySQLTableQueue queue = queuesIt.next();
+			queue.clear();
+		}
+//		tableQueues.clear();
+//		tableQueues = new HashMap<String, MySQLTableQueue>();
 		count = 0;
 	}
 }

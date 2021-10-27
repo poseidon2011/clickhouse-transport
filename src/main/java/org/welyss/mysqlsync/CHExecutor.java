@@ -27,8 +27,7 @@ public class CHExecutor implements Executor, Runnable {
 	public CHExecutor(Source source, Handler tCHHandler) {
 		this.source = source;
 		this.handler = tCHHandler;
-		queryExecutor = new ExecutorCompletionService<Integer>(
-				new ThreadPoolExecutor(3, 6, 60L, TimeUnit.SECONDS, new SynchronousQueue<Runnable>()));
+		queryExecutor = new ExecutorCompletionService<Integer>(new ThreadPoolExecutor(3, 6, 60L, TimeUnit.SECONDS, new SynchronousQueue<Runnable>()));
 	}
 
 	public void start() {
@@ -78,7 +77,10 @@ public class CHExecutor implements Executor, Runnable {
 						taskCnt++;
 					}
 					for (int i = 0; i < taskCnt; i++) {
-						queryExecutor.take().get();
+						int result = queryExecutor.take().get();
+						if (queues.count != result) {
+							log.info("queues.count: {}, result: {}.", queues.count, result);
+						}
 					}
 				}
 				log.info("[{}-{}] sync successful, count: {}, takes {} milliseconds.", source.name, source.target.name, queues.count, System.currentTimeMillis() - elapsed);
