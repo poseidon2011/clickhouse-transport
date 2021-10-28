@@ -8,6 +8,12 @@ datasource:
   acdb:
     host: localhost
     port: 3306
-    username: wuysh
-    password: wys19851011
+    username: devtest
+    password: 123123
     schema: acdb
+  wuysh:
+    host: localhost
+    port: 3306
+    username: devtest
+    password: 123123
+    schema: wuysh

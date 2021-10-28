@@ -129,9 +129,9 @@ public class CHHandler implements Handler {
 							}
 							ps.addBatch();
 						}
-						int[] tmp = ps.executeBatch();
-						for (int i = 0; i < tmp.length; i++) {
-							result+=tmp[i];
+						int[] subResult = ps.executeBatch();
+						for (int i = 0; i < subResult.length; i++) {
+							result+=subResult[i];
 						}
 					}
 				}

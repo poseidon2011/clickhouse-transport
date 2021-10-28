@@ -6,9 +6,9 @@ public class MySQLTable {
 
 	public String name;
 	public List<MySQLColumn> columns;
-	public int[] uniqueKey;
+	public Integer[] uniqueKey;
 
-	public MySQLTable(String name, List<MySQLColumn> columns, int[] uniqueKey) {
+	public MySQLTable(String name, List<MySQLColumn> columns, Integer[] uniqueKey) {
 		this.name = name;
 		this.columns = columns;
 		this.uniqueKey = uniqueKey;

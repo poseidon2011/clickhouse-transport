@@ -51,9 +51,9 @@ public class DataSourceFactory {
 				properties.setUser(username);
 				properties.setPassword(password);
 				properties.setDatabase(schema);
-				properties.setSessionId(name);
+//				properties.setSessionId(name);
 				properties.setMaxInsertBlockSize(valueOrDefaultLong(dbinfo.get("maxInsertBlockSize"), 33554432L));
-				properties.setMaxTotal(valueOrDefaultInt(dbinfo.get("maxTotal"), 10));
+				properties.setMaxTotal(valueOrDefaultInt(dbinfo.get("maxTotal"), 100));
 				properties.setTimeToLiveMillis(valueOrDefaultInt(dbinfo.get("timeToLiveMillis"), 10 * 60 * 1000));
 				ds = new ClickHouseDataSource(url, properties);
 				pool.put(name, ds);

@@ -99,6 +99,8 @@ public class Source {
 				} else {
 					result = val;
 				}
+			} else if (val instanceof byte[]) {
+				result = new String((byte[])val);
 			} else {
 				result = val;
 			}
@@ -190,7 +192,7 @@ public class Source {
 										if (table.uniqueKey.length > 0) {
 											for (int j = 0; j < table.uniqueKey.length; j++) {
 												int uniqIndex = table.uniqueKey[j];
-												whereCause.append('`').append(table.columns.get(uniqIndex)).append("`=? and ");
+												whereCause.append('`').append(table.columns.get(uniqIndex).name).append("`=? and ");
 												whereParams.add(formattedBefVals[uniqIndex]);
 											}
 										} else {

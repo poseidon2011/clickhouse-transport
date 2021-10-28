@@ -27,7 +27,7 @@ public class TableMetaCache {
 				// | Field       | Type         | Null | Key | Default | Extra |
 				List<Map<String, Object>> meta = handler.queryForMaps("DESC `" + tablenm + "`");
 				List<MySQLColumn> columns = new ArrayList<MySQLColumn>(meta.size());
-				int[] uniqueKey = null;
+				List<Integer> uniqueKey = null;
 				for (int j = 0; j < meta.size(); j++) {
 					Map<String, Object> row = meta.get(j);
 					String field = row.get("Field").toString();
@@ -38,7 +38,7 @@ public class TableMetaCache {
 				// | Table       | Non_unique | Key_name | Seq_in_index | Column_name | Collation | Cardinality | Sub_part | Packed | Null | Index_type | Comment | Index_comment |
 				List<Map<String, Object>> uniques = handler.queryForMaps("SHOW INDEX IN `" + tablenm + "` WHERE Non_unique=0");
 				if (uniques.size() > 0) {
-					uniqueKey = new int[uniques.size()];
+					uniqueKey = new ArrayList<Integer>(4);
 					int oldSeqInIndex = 0;
 					for (int i = 0; i < uniques.size(); i++) {
 						Map<String, Object> item = uniques.get(i);
@@ -46,14 +46,14 @@ public class TableMetaCache {
 						if (seqInIndex <= oldSeqInIndex) break;
 						for (int j = 0; j < columns.size(); j++) {
 							if (item.get("Column_name").toString().equals(columns.get(j).name)) {
-								uniqueKey[i] = j;
+								uniqueKey.add(j);
 								break;
 							}
 						}
 						oldSeqInIndex = seqInIndex;
 					}
 				}
-				table = new MySQLTable(tablenm, columns, uniqueKey);
+				table = new MySQLTable(tablenm, columns, uniqueKey.toArray(new Integer[uniqueKey.size()]));
 			} catch (SQLException e) {
 				throw new RuntimeException("get Table Meta faild.", e);
 			}
