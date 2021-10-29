@@ -13,6 +13,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.welyss.mysqlsync.services.TaskService;
 import org.welyss.mysqlsync.transport.CHDataSourceConfig;
 
 @RestController
@@ -28,6 +29,9 @@ public class HelloWorld {
 
 	@Autowired
 	private CHDataSourceConfig yamlProperties;
+
+	@Autowired
+	private TaskService taskService;
 
 	@Bean
 	public ExitCodeGenerator exitCodeGenerator() {
@@ -49,6 +53,11 @@ public class HelloWorld {
 //		System.out.println(tm.aa);
 		System.out.println("property wys is:" + propertytest);
 		return "Hello World!";
+	}
+
+	@RequestMapping("/metaConvert.do")
+	String tableMetaConvert() {
+		return taskService.tableMetaConvert("acdb", "acnt_account");
 	}
 
 	@PreDestroy
