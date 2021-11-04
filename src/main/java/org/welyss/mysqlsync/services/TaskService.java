@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.welyss.mysqlsync.transport.CHHandler;
 import org.welyss.mysqlsync.transport.DataSourceFactory;
 import org.welyss.mysqlsync.transport.MySQLHandler;
 
@@ -16,16 +17,18 @@ public class TaskService {
 	@Autowired
 	private DataSourceFactory dataSourceFactory;
 
-	public String tableMetaConvert(String dbname, String tablenm) {
+	public String createTable(String source, String tablenm, String target) {
+		String err = null;
 		StringBuilder meta = new StringBuilder();
 		try {
-			MySQLHandler handler = new MySQLHandler(dbname, dataSourceFactory.takeMysql(dbname));
-			List<Map<String, Object>> columns = handler.queryForMaps("SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE, NUMERIC_PRECISION, NUMERIC_SCALE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? ORDER BY ORDINAL_POSITION",
-					dbname, tablenm);
-			List<Map<String, Object>> uniKeys = handler.queryForMaps("SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY INDEX_NAME, SEQ_IN_INDEX) KEY_COL_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA=? and TABLE_NAME = ? AND NON_UNIQUE = 0 GROUP BY INDEX_NAME ORDER BY IF(INDEX_NAME='PRIMARY', 1, 2) LIMIT 1",
-					dbname, tablenm);
+			MySQLHandler sourceHandler = new MySQLHandler(source, dataSourceFactory.takeMysql(source));
+			List<Map<String, Object>> columns = sourceHandler.queryForMaps("SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE, NUMERIC_PRECISION, NUMERIC_SCALE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? ORDER BY ORDINAL_POSITION",
+					source, tablenm);
+			List<Map<String, Object>> uniKeys = sourceHandler.queryForMaps("SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY INDEX_NAME, SEQ_IN_INDEX) KEY_COL_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA=? and TABLE_NAME = ? AND NON_UNIQUE = 0 GROUP BY INDEX_NAME ORDER BY IF(INDEX_NAME='PRIMARY', 1, 2) LIMIT 1",
+					source, tablenm);
 			if (columns.size() > 0) {
-				meta.append("CREATE TABLE `").append(tablenm).append("`(\n");
+				CHHandler targetHandler = new CHHandler(target, dataSourceFactory.take(target));
+				meta.append("CREATE TABLE `").append(targetHandler.getSchema()).append("`.`").append(tablenm).append("`(\n");
 				for (int i = 0; i < columns.size(); i++) {
 					Map<String, Object> row = columns.get(i);
 					String columnName = row.get("COLUMN_NAME").toString();
@@ -74,7 +77,7 @@ public class TaskService {
 					meta.append(",\n");
 				}
 				meta.deleteCharAt(meta.length() - 2);
-//				meta.append(") ENGINE = ReplicatedReplacingMergeTree");
+//					meta.append(") ENGINE = ReplicatedReplacingMergeTree");
 				meta.append(") ENGINE=ReplacingMergeTree");
 				if (uniKeys.size()>0) {
 					meta.append(" ORDER BY (");
@@ -86,10 +89,28 @@ public class TaskService {
 					meta.deleteCharAt(meta.length() - 1);
 					meta.append(")");
 				}
+				targetHandler.update(meta.toString());
+
+				// savepoints
+				List<Map<String, Object>> spList = targetHandler.queryForMaps("SELECT id FROM ch_syncdata_savepoints WHERE sync_db=?", source);
+				if(spList.size()==0) {
+					Map<String, Object> status = sourceHandler.queryForMaps("show master status").get(0);
+					String logFile = status.get("File").toString();
+					Long logPos = Long.parseLong(status.get("Position").toString());
+					targetHandler.update("INSERT INTO ch_syncdata_savepoints SELECT max(id) + 1, ?, ?, ?, 0, now(), now() FROM ch_syncdata_savepoints", source, logFile, logPos);
+				}
+				// detail
+				Integer spId = Integer.parseInt(targetHandler.queryForMaps("SELECT id FROM ch_syncdata_savepoints WHERE sync_db=?", source).get(0).get("id").toString());
+				targetHandler.update("INSERT INTO ch_syncdata_detail SELECT max(id)+1, ?, ?, now() FROM ch_syncdata_detail", spId, tablenm);
 			}
 		} catch (Exception e) {
-			log.error("cause exception when tableMetaConvert get", e);
+			err = e.getMessage();
+			if (err.matches(".*Table.*already exists.*")) {
+				log.error("cause exception when createTable, msg: {}", err);
+			} else {
+				log.error("cause exception when createTable, msg: {}", err);
+			}
 		}
-		return meta.toString();
+		return err;
 	}
 }

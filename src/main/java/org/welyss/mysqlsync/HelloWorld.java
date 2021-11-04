@@ -12,6 +12,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.welyss.mysqlsync.services.TaskService;
 import org.welyss.mysqlsync.transport.CHDataSourceConfig;
@@ -56,8 +57,9 @@ public class HelloWorld {
 	}
 
 	@RequestMapping("/metaConvert.do")
-	String tableMetaConvert() {
-		return taskService.tableMetaConvert("acdb", "acnt_account");
+	String tableMetaConvert(@RequestParam String source, @RequestParam String target, @RequestParam String table) {
+		String err = taskService.createTable(source, table, target);
+		return err;
 	}
 
 	@PreDestroy
