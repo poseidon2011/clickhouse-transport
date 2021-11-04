@@ -18,7 +18,7 @@ public class TaskService {
 	private DataSourceFactory dataSourceFactory;
 
 	public String createTable(String source, String tablenm, String target) {
-		String err = null;
+		String err = "done";
 		StringBuilder meta = new StringBuilder();
 		try {
 			MySQLHandler sourceHandler = new MySQLHandler(source, dataSourceFactory.takeMysql(source));

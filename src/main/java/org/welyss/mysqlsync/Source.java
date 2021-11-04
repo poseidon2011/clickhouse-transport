@@ -1,6 +1,8 @@
 package org.welyss.mysqlsync;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -70,7 +72,7 @@ public class Source {
 		if (val != null) {
 			if (column.type.equals("timestamp") || column.type.equals("datetime")) {
 				if (val.getClass().isAssignableFrom(Date.class)) {
-					result = val;
+					result = LocalDateTime.ofInstant(((Date)val).toInstant(), ZoneId.systemDefault());
 				} else {
 					try {
 						result = CommonUtils.parseDateShort(val.toString());
@@ -104,6 +106,8 @@ public class Source {
 			} else {
 				result = val;
 			}
+		} else {
+			result = "";
 		}
 		return result;
 	}
