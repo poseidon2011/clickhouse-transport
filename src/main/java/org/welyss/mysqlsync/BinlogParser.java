@@ -70,4 +70,8 @@ public class BinlogParser implements Parser {
 		this.logTimestamp = logTimestamp;
 	}
 
+	@Override
+	public boolean isRunning() {
+		return parser != null ? parser.isRunning() : false;
+	}
 }

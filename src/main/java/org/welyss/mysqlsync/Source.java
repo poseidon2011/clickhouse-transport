@@ -107,7 +107,18 @@ public class Source {
 				result = val;
 			}
 		} else {
-			result = "";
+			if (column.type.startsWith("char")
+					|| column.type.startsWith("varchar")
+					|| column.type.startsWith("binary")
+					|| column.type.startsWith("varbinary")
+					|| column.type.startsWith("blob")
+					|| column.type.startsWith("text")
+					|| column.type.startsWith("enum")
+					|| column.type.startsWith("set")) {
+				result = "";
+			} else {
+				result = val;
+			}
 		}
 		return result;
 	}
@@ -139,290 +150,292 @@ public class Source {
 	}
 
 	public void start(String logFile, long logPos, long logTimestamp) throws Exception {
-		log.info("Source: {}-{} start.", name, target.name);
-		HostInfo hostInfo = dataSourceFactory.getHostInfo(name);
-		parser = new BinlogParser(baseServerId + id, name + "-" + target.name, hostInfo.host, hostInfo.port == null ? DEFAULT_MYSQL_PORT : hostInfo.port, hostInfo.username, hostInfo.password, logFile, logPos, logTimestamp);
-		parser.setBinlogEventListener(new BinlogEventListener() {
-			@Override
-			public void onEvents(BinlogEventV4 event) {
+		if (!running) {
+			log.info("Source: {}-{} start.", name, target.name);
+			HostInfo hostInfo = dataSourceFactory.getHostInfo(name);
+			parser = new BinlogParser(baseServerId + id, name + "-" + target.name, hostInfo.host, hostInfo.port == null ? DEFAULT_MYSQL_PORT : hostInfo.port, hostInfo.username, hostInfo.password, logFile, logPos, logTimestamp);
+			parser.setBinlogEventListener(new BinlogEventListener() {
+				@Override
+				public void onEvents(BinlogEventV4 event) {
 //					long elapsed = System.currentTimeMillis();
-				try {
-					BinlogEventV4Header beh = event.getHeader();
-					int type = beh.getEventType();
-					if (MySQLConstants.WRITE_ROWS_EVENT == type
-							|| MySQLConstants.WRITE_ROWS_EVENT_V2 == type
-							|| MySQLConstants.UPDATE_ROWS_EVENT == type
-							|| MySQLConstants.UPDATE_ROWS_EVENT_V2 == type
-							|| MySQLConstants.DELETE_ROWS_EVENT == type
-							|| MySQLConstants.DELETE_ROWS_EVENT_V2 == type) {
-						AbstractRowEvent abre = (AbstractRowEvent) event;
-						if (hostInfo.schema.equals(abre.getDatabaseName()) && syncTables.contains(abre.getTableName())) {
-							byte sqlType = -1;
-							MySQLTable table;
-							try {
-								table = tableMetaCache.get(name, abre.getTableName());
-								String sql = null;
-								List<List<Object>> params = new ArrayList<List<Object>>();
-								if (MySQLConstants.UPDATE_ROWS_EVENT == type || MySQLConstants.UPDATE_ROWS_EVENT_V2 == type) {
-									// update
-									sqlType = MySQLQueue.QUERY_TYPE_UPDATE;
-									List<Pair<Row>> rows = MySQLConstants.UPDATE_ROWS_EVENT == type ? ((UpdateRowsEvent) event).getRows() : ((UpdateRowsEventV2) event).getRows();
-									if (rows.size() > 0) {
-										int columnLen  = rows.get(0).getBefore().getColumns().size();
-										// remove aliyun rds hidden primary key
-										if (columnLen - table.columns.size() == 1) {
-											columnLen--;
-										}
-										Pair<Row> pair = rows.get(0);
-										boolean changed = false;
-										StringBuilder whereCause = new StringBuilder();
-										StringBuilder setCause = new StringBuilder();
-										List<Object> whereParams = new ArrayList<Object>();
-										List<Column> before = pair.getBefore().getColumns();
-										List<Column> after = pair.getAfter().getColumns();
-										Object[] formattedBefVals = new Object[before.size()];
-										List<Object> param = new ArrayList<Object>();
-										for (int j = 0; j < columnLen; j++) {
-											MySQLColumn column = table.columns.get(j);
-											Object beforeVal = formatVal(table, column, before.get(j).getValue());
-											formattedBefVals[j] = beforeVal;
-											Object afterVal = formatVal(table, column, after.get(j).getValue());
-											if (!equalObj(beforeVal, afterVal)) {
-												setCause.append("`").append(column.name).append("`=?,");
-												param.add(afterVal);
-												changed = true;
+					try {
+						BinlogEventV4Header beh = event.getHeader();
+						int type = beh.getEventType();
+						if (MySQLConstants.WRITE_ROWS_EVENT == type
+								|| MySQLConstants.WRITE_ROWS_EVENT_V2 == type
+								|| MySQLConstants.UPDATE_ROWS_EVENT == type
+								|| MySQLConstants.UPDATE_ROWS_EVENT_V2 == type
+								|| MySQLConstants.DELETE_ROWS_EVENT == type
+								|| MySQLConstants.DELETE_ROWS_EVENT_V2 == type) {
+							AbstractRowEvent abre = (AbstractRowEvent) event;
+							if (hostInfo.schema.equals(abre.getDatabaseName()) && syncTables.contains(abre.getTableName())) {
+								byte sqlType = -1;
+								MySQLTable table;
+								try {
+									table = tableMetaCache.get(name, abre.getTableName());
+									String sql = null;
+									List<List<Object>> params = new ArrayList<List<Object>>();
+									if (MySQLConstants.UPDATE_ROWS_EVENT == type || MySQLConstants.UPDATE_ROWS_EVENT_V2 == type) {
+										// update
+										sqlType = MySQLQueue.QUERY_TYPE_UPDATE;
+										List<Pair<Row>> rows = MySQLConstants.UPDATE_ROWS_EVENT == type ? ((UpdateRowsEvent) event).getRows() : ((UpdateRowsEventV2) event).getRows();
+										if (rows.size() > 0) {
+											int columnLen  = rows.get(0).getBefore().getColumns().size();
+											// remove aliyun rds hidden primary key
+											if (columnLen - table.columns.size() == 1) {
+												columnLen--;
 											}
-										}
-										if (table.uniqueKey.length > 0) {
-											for (int j = 0; j < table.uniqueKey.length; j++) {
-												int uniqIndex = table.uniqueKey[j];
-												whereCause.append('`').append(table.columns.get(uniqIndex).name).append("`=? and ");
-												whereParams.add(formattedBefVals[uniqIndex]);
-											}
-										} else {
-											for (int j = 0; j < columnLen; j++) {
-												MySQLColumn column = table.columns.get(j);
-												whereCause.append('`').append(column.name).append("`=? and ");
-												whereParams.add(formattedBefVals[j]);
-											}
-										}
-										setCause.setCharAt(setCause.length() - 1, ' ');
-										whereCause.delete(whereCause.length() - 5, whereCause.length());
-										param.addAll(whereParams);
-										params.add(param);
-										for (int i = 1; i < rows.size(); i++) {
-											pair = rows.get(i);
-											whereParams = new ArrayList<Object>();
-											before = pair.getBefore().getColumns();
-											after = pair.getAfter().getColumns();
-											param = new ArrayList<Object>();
+											Pair<Row> pair = rows.get(0);
+											boolean changed = false;
+											StringBuilder whereCause = new StringBuilder();
+											StringBuilder setCause = new StringBuilder();
+											List<Object> whereParams = new ArrayList<Object>();
+											List<Column> before = pair.getBefore().getColumns();
+											List<Column> after = pair.getAfter().getColumns();
+											Object[] formattedBefVals = new Object[before.size()];
+											List<Object> param = new ArrayList<Object>();
 											for (int j = 0; j < columnLen; j++) {
 												MySQLColumn column = table.columns.get(j);
 												Object beforeVal = formatVal(table, column, before.get(j).getValue());
+												formattedBefVals[j] = beforeVal;
 												Object afterVal = formatVal(table, column, after.get(j).getValue());
 												if (!equalObj(beforeVal, afterVal)) {
+													setCause.append("`").append(column.name).append("`=?,");
 													param.add(afterVal);
 													changed = true;
 												}
 											}
+											if (table.uniqueKey.length > 0) {
+												for (int j = 0; j < table.uniqueKey.length; j++) {
+													int uniqIndex = table.uniqueKey[j];
+													whereCause.append('`').append(table.columns.get(uniqIndex).name).append("`=? and ");
+													whereParams.add(formattedBefVals[uniqIndex]);
+												}
+											} else {
+												for (int j = 0; j < columnLen; j++) {
+													MySQLColumn column = table.columns.get(j);
+													whereCause.append('`').append(column.name).append("`=? and ");
+													whereParams.add(formattedBefVals[j]);
+												}
+											}
+											setCause.setCharAt(setCause.length() - 1, ' ');
+											whereCause.delete(whereCause.length() - 5, whereCause.length());
 											param.addAll(whereParams);
 											params.add(param);
-										}
-										if (changed) {
-											sql = "ALTER TABLE `" + target.tCHHandler.getDatabase() + "`.`" + table.name + "` UPDATE " + setCause + "WHERE " + whereCause;
-										}
-									}
-								} else if (MySQLConstants.WRITE_ROWS_EVENT == type || MySQLConstants.WRITE_ROWS_EVENT_V2 == type) {
-									// insert
-									sqlType = MySQLQueue.QUERY_TYPE_INSERT;
-									List<Row> rows = MySQLConstants.WRITE_ROWS_EVENT == type ? ((WriteRowsEvent) event).getRows() : ((WriteRowsEventV2) event).getRows();
-									if (rows.size() > 0) {
-										int columnLen  = rows.get(0).getColumns().size();
-										if (columnLen - table.columns.size() == 1) {
-											columnLen--;
-										}
-										StringBuilder selColumns = new StringBuilder();
-										StringBuilder sqlVals = new StringBuilder();
-										Row row = rows.get(0);
-										List<Column> columns = row.getColumns();
-										List<Object> param = new ArrayList<Object>();
-										try {
-											for (int j=0; j<columnLen; j++) {
-												MySQLColumn column = table.columns.get(j);
-												sqlVals.append("?,");
-												selColumns.append("`").append(column.name).append("`,");
-												param.add(formatVal(table, column, columns.get(j).getValue()));
+											for (int i = 1; i < rows.size(); i++) {
+												pair = rows.get(i);
+												whereParams = new ArrayList<Object>();
+												before = pair.getBefore().getColumns();
+												after = pair.getAfter().getColumns();
+												param = new ArrayList<Object>();
+												for (int j = 0; j < columnLen; j++) {
+													MySQLColumn column = table.columns.get(j);
+													Object beforeVal = formatVal(table, column, before.get(j).getValue());
+													Object afterVal = formatVal(table, column, after.get(j).getValue());
+													if (!equalObj(beforeVal, afterVal)) {
+														param.add(afterVal);
+														changed = true;
+													}
+												}
+												param.addAll(whereParams);
+												params.add(param);
 											}
-											selColumns.deleteCharAt(selColumns.length() - 1);
-											sqlVals.deleteCharAt(sqlVals.length() - 1);
+											if (changed) {
+												sql = "ALTER TABLE `" + target.tCHHandler.getDatabase() + "`.`" + table.name + "` UPDATE " + setCause + "WHERE " + whereCause;
+											}
+										}
+									} else if (MySQLConstants.WRITE_ROWS_EVENT == type || MySQLConstants.WRITE_ROWS_EVENT_V2 == type) {
+										// insert
+										sqlType = MySQLQueue.QUERY_TYPE_INSERT;
+										List<Row> rows = MySQLConstants.WRITE_ROWS_EVENT == type ? ((WriteRowsEvent) event).getRows() : ((WriteRowsEventV2) event).getRows();
+										if (rows.size() > 0) {
+											int columnLen  = rows.get(0).getColumns().size();
+											if (columnLen - table.columns.size() == 1) {
+												columnLen--;
+											}
+											StringBuilder selColumns = new StringBuilder();
+											StringBuilder sqlVals = new StringBuilder();
+											Row row = rows.get(0);
+											List<Column> columns = row.getColumns();
+											List<Object> param = new ArrayList<Object>();
+											try {
+												for (int j=0; j<columnLen; j++) {
+													MySQLColumn column = table.columns.get(j);
+													sqlVals.append("?,");
+													selColumns.append("`").append(column.name).append("`,");
+													param.add(formatVal(table, column, columns.get(j).getValue()));
+												}
+												selColumns.deleteCharAt(selColumns.length() - 1);
+												sqlVals.deleteCharAt(sqlVals.length() - 1);
+												params.add(param);
+												for (int i = 1; i < rows.size(); i++) {
+													row = rows.get(i);
+													columns = row.getColumns();
+													param = new ArrayList<Object>();
+													for (int j=0; j<columnLen; j++) {
+														MySQLColumn column = table.columns.get(j);
+														param.add(formatVal(table, column, columns.get(j).getValue()));
+													}
+													params.add(param);
+												}
+												sql = "INSERT INTO `" + table.name + "`(" + selColumns + ")VALUES(" + sqlVals + ")";
+											} catch (IndexOutOfBoundsException ioobe) {
+												Iterator<MySQLColumn> itci = table.columns.iterator();
+												StringBuilder sb = new StringBuilder();
+												while (itci.hasNext()) {
+													sb.append(itci.next().name).append(",");
+												}
+												log.error("target table:[{}.{}] tableInfo.columns: {}=>[{}] compare with binlog.columns size: {}."
+														, target.tCHHandler.getSchema(), table.name, table.columns.size(), sb, columnLen);
+												throw ioobe;
+											}
+										}
+									} else if (MySQLConstants.DELETE_ROWS_EVENT == type || MySQLConstants.DELETE_ROWS_EVENT_V2 == type) {
+										// delete
+										sqlType = MySQLQueue.QUERY_TYPE_DELETE;
+										List<Row> rows = MySQLConstants.DELETE_ROWS_EVENT == type ? ((DeleteRowsEvent) event).getRows() : ((DeleteRowsEventV2) event).getRows();
+										if (rows.size() > 0) {
+											int columnLen  = rows.get(0).getColumns().size();
+											if (columnLen - table.columns.size() == 1) {
+												columnLen--;
+											}
+											Row row = rows.get(0);
+											StringBuilder whereCause = new StringBuilder();
+											List<Column> columns = row.getColumns();
+											List<Object> param = new ArrayList<Object>();
+											for (int j=0; j<table.uniqueKey.length; j++) {
+												MySQLColumn column = table.columns.get(table.uniqueKey[j]);
+												if (j > 0) {
+													whereCause.append(" and ");
+												}
+												whereCause.append('`').append(column.name).append("`=?");
+												param.add(formatVal(table, column, columns.get(column.order).getValue()));
+											}
 											params.add(param);
 											for (int i = 1; i < rows.size(); i++) {
 												row = rows.get(i);
 												columns = row.getColumns();
 												param = new ArrayList<Object>();
-												for (int j=0; j<columnLen; j++) {
-													MySQLColumn column = table.columns.get(j);
-													param.add(formatVal(table, column, columns.get(j).getValue()));
+												for (int j=0; j<table.uniqueKey.length; j++) {
+													MySQLColumn column = table.columns.get(table.uniqueKey[j]);
+													param.add(formatVal(table, column, columns.get(column.order).getValue()));
 												}
 												params.add(param);
 											}
-											sql = "INSERT INTO `" + table.name + "`(" + selColumns + ")VALUES(" + sqlVals + ")";
-										} catch (IndexOutOfBoundsException ioobe) {
-											Iterator<MySQLColumn> itci = table.columns.iterator();
-											StringBuilder sb = new StringBuilder();
-											while (itci.hasNext()) {
-												sb.append(itci.next().name).append(",");
-											}
-											log.error("target table:[{}.{}] tableInfo.columns: {}=>[{}] compare with binlog.columns size: {}."
-													, target.tCHHandler.getSchema(), table.name, table.columns.size(), sb, columnLen);
-											throw ioobe;
+											sql = "ALTER TABLE `" + target.tCHHandler.getDatabase() + "`.`" + table.name + "` DELETE WHERE " + whereCause;
 										}
 									}
-								} else if (MySQLConstants.DELETE_ROWS_EVENT == type || MySQLConstants.DELETE_ROWS_EVENT_V2 == type) {
-									// delete
-									sqlType = MySQLQueue.QUERY_TYPE_DELETE;
-									List<Row> rows = MySQLConstants.DELETE_ROWS_EVENT == type ? ((DeleteRowsEvent) event).getRows() : ((DeleteRowsEventV2) event).getRows();
-									if (rows.size() > 0) {
-										int columnLen  = rows.get(0).getColumns().size();
-										if (columnLen - table.columns.size() == 1) {
-											columnLen--;
-										}
-										Row row = rows.get(0);
-										StringBuilder whereCause = new StringBuilder();
-										List<Column> columns = row.getColumns();
-										List<Object> param = new ArrayList<Object>();
-										for (int j=0; j<table.uniqueKey.length; j++) {
-											MySQLColumn column = table.columns.get(table.uniqueKey[j]);
-											if (j > 0) {
-												whereCause.append(" and ");
+									// get query and ready to execute
+									MySQLQueue queues = chExecutor.getQueues();
+									// exec
+									if (sql != null) {
+										// lock start
+										synchronized (queues) {
+											Map<String, MySQLTableQueue> tableQueues = queues.tableQueues;
+											MySQLTableQueue tableQueue;
+											if (tableQueues.containsKey(table.name)) {
+												tableQueue = tableQueues.get(table.name);
+											} else {
+												tableQueue = new MySQLTableQueue();
+												tableQueues.put(table.name, tableQueue);
 											}
-											whereCause.append('`').append(column.name).append("`=?");
-											param.add(formatVal(table, column, columns.get(column.order).getValue()));
-										}
-										params.add(param);
-										for (int i = 1; i < rows.size(); i++) {
-											row = rows.get(i);
-											columns = row.getColumns();
-											param = new ArrayList<Object>();
-											for (int j=0; j<table.uniqueKey.length; j++) {
-												MySQLColumn column = table.columns.get(table.uniqueKey[j]);
-												param.add(formatVal(table, column, columns.get(column.order).getValue()));
+											if (confict(tableQueue.lastType, sqlType)) {
+												try {
+													log.debug("[{}-{}: {}] confict, executing, taskQuene.total is [{}].", name, target.name, table.name, tableQueue.count);
+													chExecutor.execute();
+												} catch (Exception e) {
+													log.error("cause an exception when chExecutor.exec, reason is [{}]", e);
+													throw new RuntimeException(e);
+												}
+											} else if (tableQueue.count >= CommonUtils.bufferSize) {
+												try {
+													log.debug("[{}-{}: {}] buffer full, executing, taskQuene.total is [{}].", name, target.name, table.name, tableQueue.count);
+													chExecutor.execute();
+												} catch (Exception e) {
+													log.error("cause an exception when chExecutor.exec, reason is [{}]", e);
+													throw new RuntimeException(e);
+												}
 											}
-											params.add(param);
+											log.debug("task[{}-{}-{}] in source lock.", name, target.name, table.name);
+											
+											// add task
+											Map<String, List<List<Object>>> query = null;
+											switch (sqlType) {
+											case MySQLQueue.QUERY_TYPE_INSERT:
+												query = tableQueue.insert;
+												break;
+											case MySQLQueue.QUERY_TYPE_DELETE:
+												query = tableQueue.delete;
+												break;
+											case MySQLQueue.QUERY_TYPE_UPDATE:
+												query = tableQueue.update;
+												break;
+											}
+											addQueue(sql, params, query);
+											tableQueue.count += params.size();
+											queues.count += params.size();
+											
+											// update log position
+											parser.setLogPos(beh.getNextPosition());
+											parser.setLogTimestamp(event.getHeader().getTimestamp());
+											tableQueue.lastType = sqlType;
 										}
-										sql = "ALTER TABLE `" + target.tCHHandler.getDatabase() + "`.`" + table.name + "` DELETE WHERE " + whereCause;
+										// lock end
 									}
-								}
-								// get query and ready to execute
-								MySQLQueue queues = chExecutor.getQueues();
-								// exec
-								if (sql != null) {
-									// lock start
-									synchronized (queues) {
-										Map<String, MySQLTableQueue> tableQueues = queues.tableQueues;
-										MySQLTableQueue tableQueue;
-										if (tableQueues.containsKey(table.name)) {
-											tableQueue = tableQueues.get(table.name);
-										} else {
-											tableQueue = new MySQLTableQueue();
-											tableQueues.put(table.name, tableQueue);
-										}
-										if (confict(tableQueue.lastType, sqlType)) {
-											try {
-												log.debug("[{}-{}: {}] confict, executing, taskQuene.total is [{}].", name, target.name, table.name, tableQueue.count);
-												chExecutor.execute();
-											} catch (Exception e) {
-												log.error("cause an exception when chExecutor.exec, reason is [{}]", e);
-												throw new RuntimeException(e);
-											}
-										} else if (tableQueue.count >= CommonUtils.bufferSize) {
-											try {
-												log.debug("[{}-{}: {}] buffer full, executing, taskQuene.total is [{}].", name, target.name, table.name, tableQueue.count);
-												chExecutor.execute();
-											} catch (Exception e) {
-												log.error("cause an exception when chExecutor.exec, reason is [{}]", e);
-												throw new RuntimeException(e);
-											}
-										}
-										log.debug("task[{}-{}-{}] in source lock.", name, target.name, table.name);
-
-										// add task
-										Map<String, List<List<Object>>> query = null;
-										switch (sqlType) {
-										case MySQLQueue.QUERY_TYPE_INSERT:
-											query = tableQueue.insert;
-											break;
-										case MySQLQueue.QUERY_TYPE_DELETE:
-											query = tableQueue.delete;
-											break;
-										case MySQLQueue.QUERY_TYPE_UPDATE:
-											query = tableQueue.update;
-											break;
-										}
-										addQueue(sql, params, query);
-										tableQueue.count += params.size();
-										queues.count += params.size();
-
-										// update log position
-										parser.setLogPos(beh.getNextPosition());
-										parser.setLogTimestamp(event.getHeader().getTimestamp());
-										tableQueue.lastType = sqlType;
-									}
-									// lock end
-								}
-							} catch (Exception e) {
-								log.error("cause an exception when onEvents, reason is [{}]", e);
-								throw new RuntimeException(e);
-							}
-						}
-					} else if (MySQLConstants.ROTATE_EVENT == type) {
-						final RotateEvent re = (RotateEvent)event;
-						MySQLQueue queues = chExecutor.getQueues();
-						synchronized (queues) {
-							boolean done = false;
-							while (!done) {
-								try {
-									String logFile = re.getBinlogFileName().toString();
-									long logPos = re.getBinlogPosition();
-									long logTimestamp = re.getHeader().getTimestamp();
-									parser.setLogFile(logFile);
-									parser.setLogPos(logPos);
-									parser.setLogTimestamp(logTimestamp);
-									chExecutor.execute();
-									chExecutor.savepoint(logFile, logPos, logTimestamp, id);
-									done = true;
 								} catch (Exception e) {
-									log.warn("cause an exception when rotate execute/savepoint, reason: {}", e);
+									log.error("cause an exception when onEvents, reason is [{}]", e);
+									throw new RuntimeException(e);
+								}
+							}
+						} else if (MySQLConstants.ROTATE_EVENT == type) {
+							final RotateEvent re = (RotateEvent)event;
+							MySQLQueue queues = chExecutor.getQueues();
+							synchronized (queues) {
+								boolean done = false;
+								while (!done) {
+									try {
+										String logFile = re.getBinlogFileName().toString();
+										long logPos = re.getBinlogPosition();
+										long logTimestamp = re.getHeader().getTimestamp();
+										parser.setLogFile(logFile);
+										parser.setLogPos(logPos);
+										parser.setLogTimestamp(logTimestamp);
+										chExecutor.execute();
+										chExecutor.savepoint(logFile, logPos, logTimestamp, id);
+										done = true;
+									} catch (Exception e) {
+										log.warn("cause an exception when rotate execute/savepoint, reason: {}", e);
+									}
 								}
 							}
 						}
+					} catch(Exception e) {
+						log.error("cause exception when parser/chExecutor start, msg: {}", e);
+						try {
+							parser.stop();
+						} catch (Exception pe) {
+							log.error("cause exception when parser.stop(), msg: {}", e);
+						}
+						chExecutor.stop();
+						throw e;
 					}
-				} catch(Exception e) {
-					log.error("cause exception when parser/chExecutor start, msg: {}", e);
-					try {
-						parser.stop();
-					} catch (Exception pe) {
-						log.error("cause exception when parser.stop(), msg: {}", e);
-					}
-					chExecutor.stop();
-					throw e;
 				}
-			}
-		});
+			});
 
-		try {
-			chExecutor = new CHExecutor(this, target.tCHHandler);
-			// parser start
-			parser.start();
-			// executor start  
-			chExecutor.start();
-			// mark running
-			running = true;
-		} catch (Exception e) {
-			log.error("cause exception when parser/chExecutor start, msg: {}", e);
-			parser.stop();
-			chExecutor.stop();
-			throw e;
+			try {
+				chExecutor = new CHExecutor(this, target.tCHHandler);
+				// parser start
+				parser.start();
+				// executor start  
+				chExecutor.start();
+				// mark running
+				running = true;
+			} catch (Exception e) {
+				log.error("cause exception when parser/chExecutor start, msg: {}", e);
+				parser.stop();
+				chExecutor.stop();
+				throw e;
+			}
 		}
 	}
 

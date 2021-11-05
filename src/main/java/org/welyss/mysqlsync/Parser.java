@@ -13,4 +13,5 @@ public interface Parser {
 	void setLogPos(long logPos);
 	Long getLogTimestamp();
 	void setLogTimestamp(Long logTimestamp);
+	boolean isRunning();
 }
