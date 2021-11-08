@@ -151,7 +151,7 @@ public class Source {
 
 	public void start(String logFile, long logPos, long logTimestamp) throws Exception {
 		if (!running) {
-			log.info("Source: {}-{} start.", name, target.name);
+			log.info("====> Source Worker: {}-{} Start <====", name, target.name);
 			HostInfo hostInfo = dataSourceFactory.getHostInfo(name);
 			parser = new BinlogParser(baseServerId + id, name + "-" + target.name, hostInfo.host, hostInfo.port == null ? DEFAULT_MYSQL_PORT : hostInfo.port, hostInfo.username, hostInfo.password, logFile, logPos, logTimestamp);
 			parser.setBinlogEventListener(new BinlogEventListener() {
@@ -357,7 +357,7 @@ public class Source {
 												}
 											}
 											log.debug("task[{}-{}-{}] in source lock.", name, target.name, table.name);
-											
+
 											// add task
 											Map<String, List<List<Object>>> query = null;
 											switch (sqlType) {
@@ -374,7 +374,7 @@ public class Source {
 											addQueue(sql, params, query);
 											tableQueue.count += params.size();
 											queues.count += params.size();
-											
+
 											// update log position
 											parser.setLogPos(beh.getNextPosition());
 											parser.setLogTimestamp(event.getHeader().getTimestamp());
