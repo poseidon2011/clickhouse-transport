@@ -86,6 +86,7 @@ public class TargetManager implements CommandLineRunner {
 									String table = map.get("sync_table").toString();
 									Set<String> sync = source.syncTables;
 									if (!sync.contains(table)) {
+										log.info("Table: [ {} ] has been added to [ {}-{} ] task.", table, source.name, target.name);
 										sync.add(table);
 									}
 								});

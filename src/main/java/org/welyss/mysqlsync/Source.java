@@ -126,7 +126,7 @@ public class Source {
 	private BigDecimal readUnsignedLong(long value) {
 		if (value >= 0)
 			return new BigDecimal(value);
-		long lowValue = value & 0x7fffffffffffffffL;
+		long lowValue = value & Long.MAX_VALUE;
 		return BigDecimal.valueOf(lowValue).add(BigDecimal.valueOf(Long.MAX_VALUE)).add(BigDecimal.valueOf(1));
 	}
 
