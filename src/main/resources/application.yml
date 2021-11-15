@@ -5,6 +5,12 @@ datasource:
     username: wuysh
     password: wys19851011
     schema: wystest
+  chk8s:
+    host: 10.0.29.21
+    port: 8123
+    username: wuysh
+    password: wys19851011
+    schema: default
   acdb:
     host: localhost
     port: 3306

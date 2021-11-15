@@ -27,6 +27,8 @@ import org.welyss.mysqlsync.transport.TableMetaCache;
 import com.google.code.or.binlog.BinlogEventListener;
 import com.google.code.or.binlog.BinlogEventV4;
 import com.google.code.or.binlog.BinlogEventV4Header;
+import com.google.code.or.binlog.BinlogParser;
+import com.google.code.or.binlog.BinlogParserListener;
 import com.google.code.or.binlog.impl.event.AbstractRowEvent;
 import com.google.code.or.binlog.impl.event.DeleteRowsEvent;
 import com.google.code.or.binlog.impl.event.DeleteRowsEventV2;
@@ -150,10 +152,9 @@ public class Source {
 	}
 
 	public void start(String logFile, long logPos, long logTimestamp) throws Exception {
-		if (!running) {
-			log.info("====> Source Worker: {}-{} Start <====", name, target.name);
+		if (parser == null) {
 			HostInfo hostInfo = dataSourceFactory.getHostInfo(name);
-			parser = new BinlogParser(baseServerId + id, name + "-" + target.name, hostInfo.host, hostInfo.port == null ? DEFAULT_MYSQL_PORT : hostInfo.port, hostInfo.username, hostInfo.password, logFile, logPos, logTimestamp);
+			parser = new MyBinlogParser(baseServerId + id, name + "-" + target.name, hostInfo.host, hostInfo.port == null ? DEFAULT_MYSQL_PORT : hostInfo.port, hostInfo.username, hostInfo.password, logFile, logPos, logTimestamp);
 			parser.setBinlogEventListener(new BinlogEventListener() {
 				@Override
 				public void onEvents(BinlogEventV4 event) {
@@ -344,7 +345,7 @@ public class Source {
 													log.debug("[{}-{}: {}] confict, executing, taskQuene.total is [{}].", name, target.name, table.name, tableQueue.count);
 													chExecutor.execute();
 												} catch (Exception e) {
-													log.error("cause an exception when chExecutor.exec, reason is [{}]", e);
+													log.error("cause an exception when chExecutor.exec, reason is [{}]", e.getMessage());
 													throw new RuntimeException(e);
 												}
 											} else if (tableQueue.count >= CommonUtils.bufferSize) {
@@ -352,7 +353,7 @@ public class Source {
 													log.debug("[{}-{}: {}] buffer full, executing, taskQuene.total is [{}].", name, target.name, table.name, tableQueue.count);
 													chExecutor.execute();
 												} catch (Exception e) {
-													log.error("cause an exception when chExecutor.exec, reason is [{}]", e);
+													log.error("cause an exception when chExecutor.exec, reason is [{}]", e.getMessage());
 													throw new RuntimeException(e);
 												}
 											}
@@ -383,7 +384,7 @@ public class Source {
 										// lock end
 									}
 								} catch (Exception e) {
-									log.error("cause an exception when onEvents, reason is [{}]", e);
+									log.error("cause an exception when onEvents, reason is [{}]", e.getMessage());
 									throw new RuntimeException(e);
 								}
 							}
@@ -404,7 +405,7 @@ public class Source {
 										chExecutor.savepoint(logFile, logPos, logTimestamp, id);
 										done = true;
 									} catch (Exception e) {
-										log.warn("cause an exception when rotate execute/savepoint, reason: {}", e);
+										log.warn("cause an exception when rotate execute/savepoint, reason: {}", e.getMessage());
 									}
 								}
 							}
@@ -412,28 +413,43 @@ public class Source {
 					} catch(Exception e) {
 						log.error("cause exception when parser/chExecutor start, msg: {}", e);
 						try {
-							parser.stop();
+							stop();
 						} catch (Exception pe) {
-							log.error("cause exception when parser.stop(), msg: {}", e);
+							log.error("cause exception when stop(), msg: {}", e);
 						}
-						chExecutor.stop();
 						throw e;
 					}
 				}
 			});
+		}
 
+		if (chExecutor == null) {
+			chExecutor = new CHExecutor(this, target.tCHHandler);
+		}
+
+		if (!running) {
 			try {
-				chExecutor = new CHExecutor(this, target.tCHHandler);
 				// parser start
 				parser.start();
+				boolean myBinlogParserListenerExists = false;
+				for (BinlogParserListener listener : parser.getParserListeners()) {
+					if (listener instanceof MyBinlogParserListener) {
+						myBinlogParserListenerExists = true;
+						break;
+					}
+				}
+				if (!myBinlogParserListenerExists) {
+					parser.addParserListener(new MyBinlogParserListener());
+				}
+
 				// executor start  
 				chExecutor.start();
 				// mark running
 				running = true;
+				log.info("====> Source Worker: {}-{} Start <====", name, target.name);
 			} catch (Exception e) {
 				log.error("cause exception when parser/chExecutor start, msg: {}", e);
-				parser.stop();
-				chExecutor.stop();
+				stop();
 				throw e;
 			}
 		}
@@ -447,5 +463,21 @@ public class Source {
 
 	public boolean isRunning() {
 		return running;
+	}
+
+	class MyBinlogParserListener implements BinlogParserListener {
+		@Override
+		public void onException(BinlogParser parser, Exception exception) {
+			log.error("cause exception when parser onException event, msg: {}", exception);
+			try {
+				stop();
+			} catch (Exception pe) {
+				log.error("cause exception when stop(), msg: {}", pe);
+			}
+		}
+		@Override
+		public void onStart(BinlogParser parser) {}
+		@Override
+		public void onStop(BinlogParser parser) {}
 	}
 }

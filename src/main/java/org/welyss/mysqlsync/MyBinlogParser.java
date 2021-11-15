@@ -1,17 +1,19 @@
 package org.welyss.mysqlsync;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import com.google.code.or.OpenReplicator;
 import com.google.code.or.binlog.BinlogEventListener;
+import com.google.code.or.binlog.BinlogParserListener;
 
-public class BinlogParser implements Parser {
+public class MyBinlogParser implements Parser {
 	private OpenReplicator parser;
 	public String logFile;
 	public long logPos;
 	public Long logTimestamp;
 
-	public BinlogParser(int id, String name, String host, String port, String user, String password, String logFile, long logPos, Long logTimestamp) {
+	public MyBinlogParser(int id, String name, String host, String port, String user, String password, String logFile, long logPos, Long logTimestamp) {
 		parser = new OpenReplicator();
 		parser.setHost(host);
 		parser.setPort(Integer.parseInt(port));
@@ -23,6 +25,20 @@ public class BinlogParser implements Parser {
 		parser.setBinlogFileName(logFile);
 		parser.setBinlogPosition(logPos);
 		this.logTimestamp = logTimestamp;
+	}
+
+	@Override
+	public List<BinlogParserListener> getParserListeners() {
+		return parser.getBinlogParser().getParserListeners();
+	}
+
+	@Override
+	public void addParserListener(BinlogParserListener listener) {
+		parser.getBinlogParser().addParserListener(listener);
+	}
+
+	public int getParserListenerCount() {
+		return parser.getBinlogParser().getParserListeners().size();
 	}
 
 	@Override
@@ -74,4 +90,5 @@ public class BinlogParser implements Parser {
 	public boolean isRunning() {
 		return parser != null ? parser.isRunning() : false;
 	}
+
 }

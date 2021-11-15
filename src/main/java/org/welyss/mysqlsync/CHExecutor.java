@@ -32,8 +32,10 @@ public class CHExecutor implements Executor, Runnable {
 
 	public void start() {
 		running = true;
-		executor = new Thread(this, source.name);
-		executor.start();
+		if (executor == null || !executor.isAlive()) {
+			executor = new Thread(this, source.name);
+			executor.start();
+		}
 	}
 
 	public void stop() {

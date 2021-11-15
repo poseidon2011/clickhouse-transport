@@ -36,11 +36,21 @@ public class Application {
 //	}
 
 	@RequestMapping("/metaConvert.do")
-	String tableMetaConvert(@RequestParam String source, @RequestParam String target, @RequestParam String table) {
-		String err = taskService.createTable(source, table, target);
+	String tableMetaConvert(@RequestParam String source, @RequestParam String target, @RequestParam String table, @RequestParam(required = false) String cluster) {
+		String err = taskService.createTable(source, table, target, cluster);
 		return err;
 	}
 
+	@RequestMapping("/metaCreateInfo.do")
+	String generateTable(@RequestParam String source, @RequestParam String target, @RequestParam String table, @RequestParam(required = false) String cluster) {
+		String result;
+		try {
+			result = taskService.generateTable(source, table, target, cluster);
+		} catch (Exception e) {
+			result = e.getMessage();
+		}
+		return result;
+	}
 
 	public static void main(String[] args) throws Exception {
 		SpringApplication.run(Application.class, args);

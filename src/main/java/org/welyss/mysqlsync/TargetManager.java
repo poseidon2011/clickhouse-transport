@@ -112,7 +112,7 @@ public class TargetManager implements CommandLineRunner {
 			}));
 
 			try {
-				Thread.sleep(10 * 60 * 1000);
+				Thread.sleep(1 * 60 * 1000);
 			} catch (Exception e) {
 				log.warn("cause exception when target manager sleep, msg: {}", e);
 			}
