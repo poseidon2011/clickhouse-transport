@@ -400,6 +400,7 @@ public class Source {
 										long logTimestamp = re.getHeader().getTimestamp();
 										parser.setLogFile(logFile);
 										parser.setLogPos(logPos);
+										parser.setSavepoint(logPos);
 										parser.setLogTimestamp(logTimestamp);
 										chExecutor.execute();
 										chExecutor.savepoint(logFile, logPos, logTimestamp, id);
@@ -409,6 +410,8 @@ public class Source {
 									}
 								}
 							}
+						} else if (MySQLConstants.XID_EVENT == type) {
+							parser.setSavepoint(beh.getNextPosition());
 						}
 					} catch(Exception e) {
 						log.error("cause exception when parser/chExecutor start, msg: {}", e);

@@ -16,6 +16,8 @@ public interface Parser {
 	void setLogFile(String logFile);
 	long getLogPos();
 	void setLogPos(long logPos);
+	long getSavepoint();
+	void setSavepoint(long savepoint);
 	Long getLogTimestamp();
 	void setLogTimestamp(Long logTimestamp);
 	boolean isRunning();

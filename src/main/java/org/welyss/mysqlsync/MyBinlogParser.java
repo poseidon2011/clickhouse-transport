@@ -11,6 +11,7 @@ public class MyBinlogParser implements Parser {
 	private OpenReplicator parser;
 	public String logFile;
 	public long logPos;
+	public long savepoint;
 	public Long logTimestamp;
 
 	public MyBinlogParser(int id, String name, String host, String port, String user, String password, String logFile, long logPos, Long logTimestamp) {
@@ -84,6 +85,14 @@ public class MyBinlogParser implements Parser {
 	@Override
 	public void setLogTimestamp(Long logTimestamp) {
 		this.logTimestamp = logTimestamp;
+	}
+
+	public long getSavepoint() {
+		return savepoint;
+	}
+
+	public void setSavepoint(long savepoint) {
+		this.savepoint = savepoint;
 	}
 
 	@Override

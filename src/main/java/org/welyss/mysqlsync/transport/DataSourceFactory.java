@@ -47,6 +47,7 @@ public class DataSourceFactory {
 				}
 				String url = "jdbc:clickhouse://" + host + ":" + port + "/" + schema;
 				ClickHouseProperties properties = new ClickHouseProperties();
+				properties.setDataTransferTimeout(valueOrDefaultInt(dbinfo.get("dataTransferTimeout"), 20000));
 //				properties.setClientName(name);
 				properties.setUser(username);
 				properties.setPassword(password);

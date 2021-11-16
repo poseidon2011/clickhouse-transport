@@ -87,7 +87,7 @@ public class CHExecutor implements Executor, Runnable {
 				}
 				log.info("[{}-{}] sync successful, count: {}, takes {} milliseconds.", source.name, source.target.name, queues.count, System.currentTimeMillis() - elapsed);
 				queues.clear();
-				savepoint(source.parser.getLogPos(), source.parser.getLogTimestamp(), source.id);
+				savepoint(source.parser.getSavepoint(), source.parser.getLogTimestamp(), source.id);
 			}
 		}
 	}
