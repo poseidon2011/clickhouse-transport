@@ -1,5 +1,6 @@
 package org.welyss.mysqlsync;
 
+import java.time.LocalDateTime;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -79,10 +80,7 @@ public class CHExecutor implements Executor, Runnable {
 						taskCnt++;
 					}
 					for (int i = 0; i < taskCnt; i++) {
-						int result = queryExecutor.take().get();
-						if (queues.count != result) {
-							log.info("queues.count: {}, result: {}.", queues.count, result);
-						}
+						queryExecutor.take().get();
 					}
 				}
 				log.info("[{}-{}] sync successful, count: {}, takes {} milliseconds.", source.name, source.target.name, queues.count, System.currentTimeMillis() - elapsed);
@@ -97,10 +95,11 @@ public class CHExecutor implements Executor, Runnable {
 	}
 
 	public void savepoint(String logFile, long logPos, long logTimestamp, int id) throws Exception {
+		LocalDateTime now = LocalDateTime.now();
 		if (logFile == null) {
-			handler.update("ALTER TABLE `" + handler.getDatabase() + "`.`ch_syncdata_savepoints` UPDATE log_pos=?,log_timestamp=? WHERE id=?", logPos, logTimestamp, id);
+			handler.update("ALTER TABLE `" + handler.getDatabase() + "`.`ch_syncdata_savepoints` UPDATE log_pos=?,log_timestamp=?,modify=? WHERE id=?", logPos, logTimestamp, now, id);
 		} else {
-			handler.update("ALTER TABLE `" + handler.getDatabase() + "`.`ch_syncdata_savepoints` UPDATE log_file=?,log_pos=?,log_timestamp=? WHERE id=?", logFile, logPos, logTimestamp, id);
+			handler.update("ALTER TABLE `" + handler.getDatabase() + "`.`ch_syncdata_savepoints` UPDATE log_file=?,log_pos=?,log_timestamp=?,modify=? WHERE id=?", logFile, logPos, logTimestamp, now, id);
 		}
 	}
 

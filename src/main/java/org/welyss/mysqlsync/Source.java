@@ -433,6 +433,10 @@ public class Source {
 		if (!running) {
 			try {
 				// parser start
+				parser.setLogFile(logFile);
+				parser.setLogPos(logPos);
+				parser.setSavepoint(logPos);
+				parser.setLogTimestamp(logTimestamp);
 				parser.start();
 				boolean myBinlogParserListenerExists = false;
 				for (BinlogParserListener listener : parser.getParserListeners()) {

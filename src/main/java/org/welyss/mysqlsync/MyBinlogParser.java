@@ -9,8 +9,6 @@ import com.google.code.or.binlog.BinlogParserListener;
 
 public class MyBinlogParser implements Parser {
 	private OpenReplicator parser;
-	public String logFile;
-	public long logPos;
 	public long savepoint;
 	public Long logTimestamp;
 
@@ -59,22 +57,22 @@ public class MyBinlogParser implements Parser {
 
 	@Override
 	public String getLogFile() {
-		return logFile;
+		return parser.getBinlogFileName();
 	}
 
 	@Override
 	public void setLogFile(String logFile) {
-		this.logFile = logFile;
+		parser.setBinlogFileName(logFile);
 	}
 
 	@Override
 	public long getLogPos() {
-		return logPos;
+		return parser.getBinlogPosition();
 	}
 
 	@Override
 	public void setLogPos(long logPos) {
-		this.logPos = logPos;
+		parser.setBinlogPosition(logPos);
 	}
 
 	@Override
