@@ -12,6 +12,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,6 +43,8 @@ import com.google.code.or.common.glossary.Pair;
 import com.google.code.or.common.glossary.Row;
 import com.google.code.or.common.util.MySQLConstants;
 
+import io.micrometer.core.instrument.MeterRegistry;
+
 @Component
 public class Source {
 	private static final String DEFAULT_MYSQL_PORT = "3306";
@@ -56,6 +59,8 @@ public class Source {
 	@Value("${base.server.id}")
 	private int baseServerId;
 
+	@Autowired
+	private MeterRegistry registry;
 	@Autowired
 	private DataSourceFactory dataSourceFactory;
 	@Autowired
@@ -154,7 +159,9 @@ public class Source {
 	public void start(String logFile, long logPos, long logTimestamp) throws Exception {
 		if (parser == null) {
 			HostInfo hostInfo = dataSourceFactory.getHostInfo(name);
-			parser = new MyBinlogParser(baseServerId + id, name + "-" + target.name, hostInfo.host, hostInfo.port == null ? DEFAULT_MYSQL_PORT : hostInfo.port, hostInfo.username, hostInfo.password, logFile, logPos, logTimestamp);
+			AtomicLong gaugeLogPos = registry.gauge("clickhouse_transport_logpos", new AtomicLong(logPos));
+			AtomicLong gaugeLogTimestamp = registry.gauge("clickhouse_transport_logtimestamp", new AtomicLong(logTimestamp));
+			parser = new MyBinlogParser(baseServerId + id, name + "-" + target.name, hostInfo.host, hostInfo.port == null ? DEFAULT_MYSQL_PORT : hostInfo.port, hostInfo.username, hostInfo.password, logFile, logPos, gaugeLogPos, gaugeLogTimestamp);
 			parser.setBinlogEventListener(new BinlogEventListener() {
 				@Override
 				public void onEvents(BinlogEventV4 event) {
@@ -413,6 +420,8 @@ public class Source {
 						} else if (MySQLConstants.XID_EVENT == type) {
 							parser.setSavepoint(beh.getNextPosition());
 						}
+						parser.setLogPos(beh.getNextPosition());
+						parser.setLogTimestamp(event.getHeader().getTimestamp());
 					} catch(Exception e) {
 						log.error("cause exception when parser/chExecutor start, msg: {}", e);
 						try {
@@ -449,7 +458,7 @@ public class Source {
 					parser.addParserListener(new MyBinlogParserListener());
 				}
 
-				// executor start  
+				// executor start
 				chExecutor.start();
 				// mark running
 				running = true;

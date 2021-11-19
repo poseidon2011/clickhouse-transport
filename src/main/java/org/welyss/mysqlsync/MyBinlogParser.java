@@ -2,6 +2,7 @@ package org.welyss.mysqlsync;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.code.or.OpenReplicator;
 import com.google.code.or.binlog.BinlogEventListener;
@@ -9,10 +10,10 @@ import com.google.code.or.binlog.BinlogParserListener;
 
 public class MyBinlogParser implements Parser {
 	private OpenReplicator parser;
-	public long savepoint;
-	public Long logTimestamp;
+	public AtomicLong savepoint;
+	public AtomicLong logTimestamp;
 
-	public MyBinlogParser(int id, String name, String host, String port, String user, String password, String logFile, long logPos, Long logTimestamp) {
+	public MyBinlogParser(int id, String name, String host, String port, String user, String password, String logFile, long logPos, AtomicLong savepoint, AtomicLong logTimestamp) {
 		parser = new OpenReplicator();
 		parser.setHost(host);
 		parser.setPort(Integer.parseInt(port));
@@ -24,6 +25,7 @@ public class MyBinlogParser implements Parser {
 		parser.setBinlogFileName(logFile);
 		parser.setBinlogPosition(logPos);
 		this.logTimestamp = logTimestamp;
+		this.savepoint = savepoint;
 	}
 
 	@Override
@@ -77,20 +79,20 @@ public class MyBinlogParser implements Parser {
 
 	@Override
 	public Long getLogTimestamp() {
-		return logTimestamp;
+		return logTimestamp.get();
 	}
 
 	@Override
 	public void setLogTimestamp(Long logTimestamp) {
-		this.logTimestamp = logTimestamp;
+		this.logTimestamp.set(logTimestamp);
 	}
 
 	public long getSavepoint() {
-		return savepoint;
+		return savepoint.get();
 	}
 
 	public void setSavepoint(long savepoint) {
-		this.savepoint = savepoint;
+		this.savepoint.set(savepoint);
 	}
 
 	@Override
