@@ -11,6 +11,7 @@ import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,14 +19,15 @@ import org.welyss.mysqlsync.transport.Handler;
 
 public class CHExecutor implements Executor, Runnable {
 	protected Source source;
-	private MySQLQueue queues = new MySQLQueue();
+	private MySQLQueue queues;
 	private Handler handler;
 	private CompletionService<Integer> queryExecutor;
 	private Thread executor;
 	private boolean running = false;
 	private final Logger log = LoggerFactory.getLogger(getClass());
 
-	public CHExecutor(Source source, Handler tCHHandler) {
+	public CHExecutor(Source source, Handler tCHHandler, AtomicInteger count) {
+		queues = new MySQLQueue(count);
 		this.source = source;
 		this.handler = tCHHandler;
 		queryExecutor = new ExecutorCompletionService<Integer>(new ThreadPoolExecutor(3, 6, 60L, TimeUnit.SECONDS, new SynchronousQueue<Runnable>()));
@@ -60,7 +62,7 @@ public class CHExecutor implements Executor, Runnable {
 	@Override
 	public void execute() throws Exception {
 		synchronized (queues) {
-			if (queues.count > 0) {
+			if (queues.count.intValue() > 0) {
 				long elapsed = System.currentTimeMillis();
 				Iterator<Entry<String, MySQLTableQueue>> queryIt = queues.tableQueues.entrySet().iterator();
 				while (queryIt.hasNext()) {

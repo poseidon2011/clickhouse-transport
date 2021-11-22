@@ -12,6 +12,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
@@ -381,7 +382,7 @@ public class Source {
 											}
 											addQueue(sql, params, query);
 											tableQueue.count += params.size();
-											queues.count += params.size();
+											queues.count.set(queues.count.intValue() + params.size());
 
 											// update log position
 											parser.setLogPos(beh.getNextPosition());
@@ -436,7 +437,8 @@ public class Source {
 		}
 
 		if (chExecutor == null) {
-			chExecutor = new CHExecutor(this, target.tCHHandler);
+			AtomicInteger queueCount = registry.gauge("clickhouse_transport_queue_count", new AtomicInteger(0));
+			chExecutor = new CHExecutor(this, target.tCHHandler, queueCount);
 		}
 
 		if (!running) {
